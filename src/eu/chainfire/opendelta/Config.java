@@ -101,9 +101,7 @@ public class Config {
         injectSignatureKeys = res.getString(R.string.inject_signature_keys);
         secureModeEnable = res.getBoolean(R.bool.secure_mode_enable);
         secureModeDefault = res.getBoolean(R.bool.secure_mode_default);
-        urlBaseJson = String.format(
-                res.getString(R.string.url_base_json),
-                propertyDevice, propertyDevice);
+        urlBaseJson = String.format(res.getString(R.string.url_base_json), propertyDevice);
         officialVersionTag = res.getString(R.string.official_version_tag);
         weeklyVersionTag = res.getString(R.string.weekly_version_tag);
         securityVersionTag = res.getString(R.string.security_version_tag);

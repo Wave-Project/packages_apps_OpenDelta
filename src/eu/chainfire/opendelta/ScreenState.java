@@ -1,20 +1,20 @@
-/* 
+/*
  * Copyright (C) 2013-2014 Jorrit "Chainfire" Jongma
  * Copyright (C) 2013-2014 The OmniROM Project
  */
-/* 
+/*
  * This file is part of OpenDelta.
- * 
+ *
  * OpenDelta is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- * 
+ *
  * OpenDelta is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with OpenDelta. If not, see <http://www.gnu.org/licenses/>.
  */
@@ -28,15 +28,10 @@ import android.content.IntentFilter;
 import android.os.PowerManager;
 
 public class ScreenState {
-    public interface OnScreenStateListener {
-        void onScreenState(boolean state);
-    }
-
+    private final IntentFilter filter;
     private Context context = null;
     private OnScreenStateListener onScreenStateListener = null;
     private volatile Boolean stateLast = null;
-
-    private final IntentFilter filter;
     private final BroadcastReceiver receiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -54,10 +49,12 @@ public class ScreenState {
         if (onScreenStateListener != null) {
             Boolean state = null;
             if (intent != null) {
-                if (Intent.ACTION_SCREEN_ON.equals(intent.getAction()))
+                if (Intent.ACTION_SCREEN_ON.equals(intent.getAction())) {
                     state = true;
-                if (Intent.ACTION_SCREEN_OFF.equals(intent.getAction()))
+                }
+                if (Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) {
                     state = false;
+                }
             }
             if (state == null) {
                 state = ((PowerManager) context.getSystemService(Context.POWER_SERVICE))
@@ -96,5 +93,9 @@ public class ScreenState {
         if (stateLast == null)
             return false;
         return stateLast;
+    }
+
+    public interface OnScreenStateListener {
+        void onScreenState(boolean state);
     }
 }

@@ -53,7 +53,8 @@ public class SettingsActivity extends Activity {
     @Override
     protected void onPostCreate(Bundle savedInstanceState) {
         super.onPostCreate(savedInstanceState);
-        getFragmentManager().beginTransaction().replace(android.R.id.content, new SettingsFragment()).commit();
+        getFragmentManager().beginTransaction().replace(android.R.id.content,
+                new SettingsFragment()).commit();
     }
 
     @Override

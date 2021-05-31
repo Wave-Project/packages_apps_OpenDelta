@@ -22,30 +22,6 @@
 
 package eu.chainfire.opendelta;
 
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.lang.reflect.Method;
-import java.math.BigInteger;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.zip.ZipFile;
-import javax.net.ssl.HttpsURLConnection;
-
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.AlarmManager;
@@ -71,6 +47,32 @@ import android.os.SystemClock;
 import android.os.UpdateEngine;
 import android.preference.PreferenceManager;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.lang.reflect.Method;
+import java.math.BigInteger;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.zip.ZipFile;
+
+import javax.net.ssl.HttpsURLConnection;
+
+import co.aospa.hub.R;
 import eu.chainfire.opendelta.BatteryState.OnBatteryStateListener;
 import eu.chainfire.opendelta.DeltaInfo.ProgressListener;
 import eu.chainfire.opendelta.NetworkState.OnNetworkStateListener;
@@ -78,10 +80,104 @@ import eu.chainfire.opendelta.Scheduler.OnWantUpdateCheckListener;
 import eu.chainfire.opendelta.ScreenState.OnScreenStateListener;
 
 public class UpdateService extends Service implements OnNetworkStateListener,
-OnBatteryStateListener, OnScreenStateListener,
-OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
+        OnBatteryStateListener, OnScreenStateListener,
+        OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
+    public static final String ACTION_SYSTEM_UPDATE_SETTINGS = "android.settings.SYSTEM_UPDATE_SETTINGS";
+    public static final String PERMISSION_ACCESS_CACHE_FILESYSTEM = "android.permission.ACCESS_CACHE_FILESYSTEM";
+    public static final String PERMISSION_REBOOT = "android.permission.REBOOT";
+    public static final String BROADCAST_INTENT = "eu.chainfire.opendelta.intent.BROADCAST_STATE";
+    public static final String EXTRA_STATE = "eu.chainfire.opendelta.extra.ACTION_STATE";
+    public static final String EXTRA_LAST_CHECK = "eu.chainfire.opendelta.extra.LAST_CHECK";
+    public static final String EXTRA_PROGRESS = "eu.chainfire.opendelta.extra.PROGRESS";
+    public static final String EXTRA_CURRENT = "eu.chainfire.opendelta.extra.CURRENT";
+    public static final String EXTRA_TOTAL = "eu.chainfire.opendelta.extra.TOTAL";
+    public static final String EXTRA_FILENAME = "eu.chainfire.opendelta.extra.FILENAME";
+    public static final String EXTRA_MS = "eu.chainfire.opendelta.extra.MS";
+    public static final String EXTRA_ERROR_CODE = "eu.chainfire.opendelta.extra.ERROR_CODE";
+    public static final String STATE_ACTION_NONE = "action_none";
+    public static final String STATE_ACTION_CHECKING = "action_checking";
+    public static final String STATE_ACTION_CHECKING_SUM = "action_checking_sum";
+    public static final String STATE_ACTION_SEARCHING = "action_searching";
+    public static final String STATE_ACTION_SEARCHING_SUM = "action_searching_sum";
+    public static final String STATE_ACTION_DOWNLOADING = "action_downloading";
+    public static final String STATE_ACTION_APPLYING = "action_applying";
+    public static final String STATE_ACTION_APPLYING_PATCH = "action_applying_patch";
+    public static final String STATE_ACTION_APPLYING_SUM = "action_applying_sum";
+    public static final String STATE_ACTION_READY = "action_ready";
+    public static final String STATE_ACTION_AB_FLASH = "action_ab_flash";
+    public static final String STATE_ACTION_AB_FINISHED = "action_ab_finished";
+    public static final String STATE_ERROR_DISK_SPACE = "error_disk_space";
+    public static final String STATE_ERROR_UNKNOWN = "error_unknown";
+    public static final String STATE_ERROR_UNOFFICIAL = "error_unofficial";
+    public static final String STATE_ACTION_BUILD = "action_build";
+    public static final String STATE_ERROR_DOWNLOAD = "error_download";
+    public static final String STATE_ERROR_CONNECTION = "error_connection";
+    public static final String STATE_ERROR_PERMISSIONS = "error_permissions";
+    public static final String STATE_ERROR_FLASH = "error_flash";
+    public static final String STATE_ERROR_AB_FLASH = "error_ab_flash";
+    public static final String STATE_ERROR_FLASH_FILE = "error_flash_file";
+    public static final String STATE_ACTION_FLASH_FILE_READY = "action_flash_file_ready";
+    public static final String PREF_READY_FILENAME_NAME = "ready_filename";
+    public static final String PREF_LAST_CHECK_TIME_NAME = "last_check_time";
+    public static final long PREF_LAST_CHECK_TIME_DEFAULT = 0L;
+    public static final String PREF_CURRENT_FILENAME_NAME = "current_filename";
+    public static final String PREF_FILE_FLASH = "file_flash";
+    public static final String PREF_AUTO_UPDATE_METERED_NETWORKS = "auto_update_metered_networks";
+    public static final String PREF_LATEST_FULL_NAME = "latest_full_name";
+    public static final String PREF_LATEST_DELTA_NAME = "latest_delta_name";
+    public static final String PREF_STOP_DOWNLOAD = "stop_download";
+    public static final String PREF_DOWNLOAD_SIZE = "download_size_long";
+    public static final String PREF_DELTA_SIGNATURE = "delta_signature";
+    public static final String PREF_INITIAL_FILE = "initial_file";
+    public static final int PREF_AUTO_DOWNLOAD_DISABLED = 0;
+    public static final int PREF_AUTO_DOWNLOAD_CHECK = 1;
+    public static final int PREF_AUTO_DOWNLOAD_DELTA = 2;
+    public static final int PREF_AUTO_DOWNLOAD_FULL = 3;
+    public static final String PREF_AUTO_DOWNLOAD_CHECK_STRING = String.valueOf(PREF_AUTO_DOWNLOAD_CHECK);
+    public static final String PREF_AUTO_DOWNLOAD_DISABLED_STRING = String.valueOf(PREF_AUTO_DOWNLOAD_DISABLED);
+    static final String ACTION_CLEAR_INSTALL_RUNNING =
+            "eu.chainfire.opendelta.action.ACTION_CLEAR_INSTALL_RUNNING";
     private static final int HTTP_READ_TIMEOUT = 30000;
     private static final int HTTP_CONNECTION_TIMEOUT = 30000;
+    private static final String ACTION_CHECK = "eu.chainfire.opendelta.action.CHECK";
+    private static final String ACTION_FLASH = "eu.chainfire.opendelta.action.FLASH";
+    private static final String ACTION_ALARM = "eu.chainfire.opendelta.action.ALARM";
+    private static final String EXTRA_ALARM_ID = "eu.chainfire.opendelta.extra.ALARM_ID";
+    private static final String ACTION_NOTIFICATION_DELETED = "eu.chainfire.opendelta.action.NOTIFICATION_DELETED";
+    private static final String ACTION_BUILD = "eu.chainfire.opendelta.action.BUILD";
+    private static final String ACTION_UPDATE = "eu.chainfire.opendelta.action.UPDATE";
+    private static final String ACTION_PROGRESS_NOTIFICATION_DISMISSED =
+            "eu.chainfire.opendelta.action.ACTION_PROGRESS_NOTIFICATION_DISMISSED";
+    private static final String ACTION_FLASH_FILE = "eu.chainfire.opendelta.action.FLASH_FILE";
+    private static final String NOTIFICATION_CHANNEL_ID = "eu.chainfire.opendelta.notification";
+    private static final int NOTIFICATION_BUSY = 1;
+    private static final int NOTIFICATION_UPDATE = 2;
+    private static final int NOTIFICATION_ERROR = 3;
+    private static final String PREF_LAST_SNOOZE_TIME_NAME = "last_snooze_time";
+    private static final long PREF_LAST_SNOOZE_TIME_DEFAULT = 0L;
+    // we only snooze until a new build
+    private static final String PREF_SNOOZE_UPDATE_NAME = "last_snooze_update";
+    private static final long SNOOZE_MS = 24 * AlarmManager.INTERVAL_HOUR;
+    private Config config;
+    private HandlerThread handlerThread;
+    private Handler handler;
+    private String state = STATE_ACTION_NONE;
+    private NetworkState networkState = null;
+    private BatteryState batteryState = null;
+    private ScreenState screenState = null;
+    private Scheduler scheduler = null;
+    private PowerManager.WakeLock wakeLock = null;
+    private WifiManager.WifiLock wifiLock = null;
+    private NotificationManager notificationManager = null;
+    private boolean stopDownload;
+    private boolean updateRunning;
+    private int failedUpdateCount;
+    private SharedPreferences prefs = null;
+    private Notification.Builder mBuilder;
+    private boolean isProgressNotificationDismissed = false;
+    // url override
+    private boolean isUrlOverride = false;
+    private String sumUrlOvr = null;
 
     public static void start(Context context) {
         start(context, null);
@@ -127,121 +223,28 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
         return PendingIntent.getService(context, id, intent, 0);
     }
 
-    public static final String ACTION_SYSTEM_UPDATE_SETTINGS = "android.settings.SYSTEM_UPDATE_SETTINGS";
-    public static final String PERMISSION_ACCESS_CACHE_FILESYSTEM = "android.permission.ACCESS_CACHE_FILESYSTEM";
-    public static final String PERMISSION_REBOOT = "android.permission.REBOOT";
+    public static boolean isProgressState(String state) {
+        return state.equals(UpdateService.STATE_ACTION_DOWNLOADING) ||
+                state.equals(UpdateService.STATE_ACTION_SEARCHING) ||
+                state.equals(UpdateService.STATE_ACTION_SEARCHING_SUM) ||
+                state.equals(UpdateService.STATE_ACTION_CHECKING) ||
+                state.equals(UpdateService.STATE_ACTION_CHECKING_SUM) ||
+                state.equals(UpdateService.STATE_ACTION_APPLYING) ||
+                state.equals(UpdateService.STATE_ACTION_APPLYING_SUM) ||
+                state.equals(UpdateService.STATE_ACTION_APPLYING_PATCH) ||
+                state.equals(UpdateService.STATE_ACTION_AB_FLASH);
+    }
 
-    public static final String BROADCAST_INTENT = "eu.chainfire.opendelta.intent.BROADCAST_STATE";
-    public static final String EXTRA_STATE = "eu.chainfire.opendelta.extra.ACTION_STATE";
-    public static final String EXTRA_LAST_CHECK = "eu.chainfire.opendelta.extra.LAST_CHECK";
-    public static final String EXTRA_PROGRESS = "eu.chainfire.opendelta.extra.PROGRESS";
-    public static final String EXTRA_CURRENT = "eu.chainfire.opendelta.extra.CURRENT";
-    public static final String EXTRA_TOTAL = "eu.chainfire.opendelta.extra.TOTAL";
-    public static final String EXTRA_FILENAME = "eu.chainfire.opendelta.extra.FILENAME";
-    public static final String EXTRA_MS = "eu.chainfire.opendelta.extra.MS";
-    public static final String EXTRA_ERROR_CODE = "eu.chainfire.opendelta.extra.ERROR_CODE";
-
-    public static final String STATE_ACTION_NONE = "action_none";
-    public static final String STATE_ACTION_CHECKING = "action_checking";
-    public static final String STATE_ACTION_CHECKING_SUM = "action_checking_sum";
-    public static final String STATE_ACTION_SEARCHING = "action_searching";
-    public static final String STATE_ACTION_SEARCHING_SUM = "action_searching_sum";
-    public static final String STATE_ACTION_DOWNLOADING = "action_downloading";
-    public static final String STATE_ACTION_APPLYING = "action_applying";
-    public static final String STATE_ACTION_APPLYING_PATCH = "action_applying_patch";
-    public static final String STATE_ACTION_APPLYING_SUM = "action_applying_sum";
-    public static final String STATE_ACTION_READY = "action_ready";
-    public static final String STATE_ACTION_AB_FLASH = "action_ab_flash";
-    public static final String STATE_ACTION_AB_FINISHED = "action_ab_finished";
-    public static final String STATE_ERROR_DISK_SPACE = "error_disk_space";
-    public static final String STATE_ERROR_UNKNOWN = "error_unknown";
-    public static final String STATE_ERROR_UNOFFICIAL = "error_unofficial";
-    public static final String STATE_ACTION_BUILD = "action_build";
-    public static final String STATE_ERROR_DOWNLOAD = "error_download";
-    public static final String STATE_ERROR_CONNECTION = "error_connection";
-    public static final String STATE_ERROR_PERMISSIONS = "error_permissions";
-    public static final String STATE_ERROR_FLASH = "error_flash";
-    public static final String STATE_ERROR_AB_FLASH = "error_ab_flash";
-    public static final String STATE_ERROR_FLASH_FILE = "error_flash_file";
-    public static final String STATE_ACTION_FLASH_FILE_READY = "action_flash_file_ready";
-
-    private static final String ACTION_CHECK = "eu.chainfire.opendelta.action.CHECK";
-    private static final String ACTION_FLASH = "eu.chainfire.opendelta.action.FLASH";
-    private static final String ACTION_ALARM = "eu.chainfire.opendelta.action.ALARM";
-    private static final String EXTRA_ALARM_ID = "eu.chainfire.opendelta.extra.ALARM_ID";
-    private static final String ACTION_NOTIFICATION_DELETED = "eu.chainfire.opendelta.action.NOTIFICATION_DELETED";
-    private static final String ACTION_BUILD = "eu.chainfire.opendelta.action.BUILD";
-    private static final String ACTION_UPDATE = "eu.chainfire.opendelta.action.UPDATE";
-    private static final String ACTION_PROGRESS_NOTIFICATION_DISMISSED =
-            "eu.chainfire.opendelta.action.ACTION_PROGRESS_NOTIFICATION_DISMISSED";
-    static final String ACTION_CLEAR_INSTALL_RUNNING =
-            "eu.chainfire.opendelta.action.ACTION_CLEAR_INSTALL_RUNNING";
-    private static final String ACTION_FLASH_FILE = "eu.chainfire.opendelta.action.FLASH_FILE";
-
-    private static final String NOTIFICATION_CHANNEL_ID = "eu.chainfire.opendelta.notification";
-    private static final int NOTIFICATION_BUSY = 1;
-    private static final int NOTIFICATION_UPDATE = 2;
-    private static final int NOTIFICATION_ERROR = 3;
-
-    public static final String PREF_READY_FILENAME_NAME = "ready_filename";
-
-    public static final String PREF_LAST_CHECK_TIME_NAME = "last_check_time";
-    public static final long PREF_LAST_CHECK_TIME_DEFAULT = 0L;
-
-    private static final String PREF_LAST_SNOOZE_TIME_NAME = "last_snooze_time";
-    private static final long PREF_LAST_SNOOZE_TIME_DEFAULT = 0L;
-    // we only snooze until a new build
-    private static final String PREF_SNOOZE_UPDATE_NAME = "last_snooze_update";
-
-    public static final String PREF_CURRENT_FILENAME_NAME = "current_filename";
-    public static final String PREF_FILE_FLASH = "file_flash";
-
-    private static final long SNOOZE_MS = 24 * AlarmManager.INTERVAL_HOUR;
-
-    public static final String PREF_AUTO_UPDATE_METERED_NETWORKS = "auto_update_metered_networks";
-
-    public static final String PREF_LATEST_FULL_NAME = "latest_full_name";
-    public static final String PREF_LATEST_DELTA_NAME = "latest_delta_name";
-    public static final String PREF_STOP_DOWNLOAD = "stop_download";
-    public static final String PREF_DOWNLOAD_SIZE = "download_size_long";
-    public static final String PREF_DELTA_SIGNATURE = "delta_signature";
-    public static final String PREF_INITIAL_FILE = "initial_file";
-
-    public static final int PREF_AUTO_DOWNLOAD_DISABLED = 0;
-    public static final int PREF_AUTO_DOWNLOAD_CHECK = 1;
-    public static final int PREF_AUTO_DOWNLOAD_DELTA = 2;
-    public static final int PREF_AUTO_DOWNLOAD_FULL = 3;
-
-    public static final String PREF_AUTO_DOWNLOAD_CHECK_STRING = String.valueOf(PREF_AUTO_DOWNLOAD_CHECK);
-    public static final String PREF_AUTO_DOWNLOAD_DISABLED_STRING = String.valueOf(PREF_AUTO_DOWNLOAD_DISABLED);
-
-    private Config config;
-
-    private HandlerThread handlerThread;
-    private Handler handler;
-
-    private String state = STATE_ACTION_NONE;
-
-    private NetworkState networkState = null;
-    private BatteryState batteryState = null;
-    private ScreenState screenState = null;
-
-    private Scheduler scheduler = null;
-
-    private PowerManager.WakeLock wakeLock = null;
-    private WifiManager.WifiLock wifiLock = null;
-
-    private NotificationManager notificationManager = null;
-    private boolean stopDownload;
-    private boolean updateRunning;
-    private int failedUpdateCount;
-    private SharedPreferences prefs = null;
-    private Notification.Builder mBuilder;
-    private boolean isProgressNotificationDismissed = false;
-
-    // url override
-    private boolean isUrlOverride = false;
-    private String sumUrlOvr = null;
+    public static boolean isErrorState(String state) {
+        return state.equals(UpdateService.STATE_ERROR_DOWNLOAD) ||
+                state.equals(UpdateService.STATE_ERROR_DISK_SPACE) ||
+                state.equals(UpdateService.STATE_ERROR_UNKNOWN) ||
+                state.equals(UpdateService.STATE_ERROR_UNOFFICIAL) ||
+                state.equals(UpdateService.STATE_ERROR_CONNECTION) ||
+                state.equals(UpdateService.STATE_ERROR_AB_FLASH) ||
+                state.equals(UpdateService.STATE_ERROR_FLASH_FILE) ||
+                state.equals(UpdateService.STATE_ERROR_FLASH);
+    }
 
     /*
      * Using reflection voodoo instead calling the hidden class directly, to
@@ -335,7 +338,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
                 }
             } else if (ACTION_FLASH.equals(intent.getAction())) {
                 if (checkPermissions()) {
-                    if(Config.isABDevice()) {
+                    if (Config.isABDevice()) {
                         flashABUpdate();
                     } else {
                         flashUpdate();
@@ -344,13 +347,12 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
             } else if (ACTION_ALARM.equals(intent.getAction())) {
                 scheduler.alarm(intent.getIntExtra(EXTRA_ALARM_ID, -1));
             } else if (ACTION_NOTIFICATION_DELETED.equals(intent.getAction())) {
-                prefs.edit().putLong(PREF_LAST_SNOOZE_TIME_NAME,
-                        System.currentTimeMillis()).commit();
+                prefs.edit().putLong(PREF_LAST_SNOOZE_TIME_NAME, System.currentTimeMillis()).apply();
                 String lastBuild = prefs.getString(PREF_LATEST_FULL_NAME, null);
                 if (lastBuild != null) {
                     // only snooze until no newer build is available
                     Logger.i("Snoozing notification for " + lastBuild);
-                    prefs.edit().putString(PREF_SNOOZE_UPDATE_NAME, lastBuild).commit();
+                    prefs.edit().putString(PREF_SNOOZE_UPDATE_NAME, lastBuild).apply();
                 }
             } else if (ACTION_PROGRESS_NOTIFICATION_DISMISSED.equals(intent.getAction())) {
                 isProgressNotificationDismissed = true;
@@ -376,12 +378,12 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
     }
 
     private void updateState(String state, Float progress,
-            Long current, Long total, String filename, Long ms) {
-        updateState(state, progress, current,  total,  filename,  ms, -1);
+                             Long current, Long total, String filename, Long ms) {
+        updateState(state, progress, current, total, filename, ms, -1);
     }
 
     private synchronized void updateState(String state, Float progress,
-            Long current, Long total, String filename, Long ms, int errorCode) {
+                                          Long current, Long total, String filename, Long ms, int errorCode) {
         this.state = state;
 
         Intent i = new Intent(BROADCAST_INTENT);
@@ -433,7 +435,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
 
     @Override
     public void onSharedPreferenceChanged(SharedPreferences sharedPreferences,
-            String key) {
+                                          String key) {
         Logger.d("onSharedPreferenceChanged " + key);
 
         if (PREF_AUTO_UPDATE_METERED_NETWORKS.equals(key)) {
@@ -455,7 +457,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
             batteryState.onSharedPreferenceChanged(sharedPreferences, key);
         }
         if (scheduler != null) {
-        	scheduler.onSharedPreferenceChanged(sharedPreferences, key);
+            scheduler.onSharedPreferenceChanged(sharedPreferences, key);
         }
     }
 
@@ -515,7 +517,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
             Logger.d("Update found: %s", filename);
             updateState(STATE_ACTION_READY, null, null, null, (new File(
                     filename)).getName(), prefs.getLong(
-                            PREF_LAST_CHECK_TIME_NAME, PREF_LAST_CHECK_TIME_DEFAULT));
+                    PREF_LAST_CHECK_TIME_NAME, PREF_LAST_CHECK_TIME_DEFAULT));
 
             if (!userInitiated && notify) {
                 if (!isSnoozeNotification()) {
@@ -529,8 +531,8 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
 
     private PendingIntent getProgressNotificationIntent() {
         Intent notificationIntent = new Intent(this, UpdateService.class);
-            notificationIntent.setAction(ACTION_PROGRESS_NOTIFICATION_DISMISSED);
-            return PendingIntent.getService(this, 0, notificationIntent, 0);
+        notificationIntent.setAction(ACTION_PROGRESS_NOTIFICATION_DISMISSED);
+        return PendingIntent.getService(this, 0, notificationIntent, 0);
     }
 
     private PendingIntent getNotificationIntent(boolean delete) {
@@ -562,12 +564,12 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
         notificationManager.notify(
                 NOTIFICATION_UPDATE,
                 (new Notification.Builder(this, NOTIFICATION_CHANNEL_ID))
-                .setSmallIcon(R.drawable.stat_notify_update)
-                .setContentTitle(readyToFlash ? getString(R.string.notify_title_flash) : getString(R.string.notify_title_download))
-                .setShowWhen(true)
-                .setContentIntent(getNotificationIntent(false))
-                .setDeleteIntent(getNotificationIntent(true))
-                .setContentText(notifyFileName).build());
+                        .setSmallIcon(R.drawable.stat_notify_update)
+                        .setContentTitle(readyToFlash ? getString(R.string.notify_title_flash) : getString(R.string.notify_title_download))
+                        .setShowWhen(true)
+                        .setContentIntent(getNotificationIntent(false))
+                        .setDeleteIntent(getNotificationIntent(true))
+                        .setContentText(notifyFileName).build());
     }
 
     private void startABRebootNotification() {
@@ -578,12 +580,12 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
         notificationManager.notify(
                 NOTIFICATION_UPDATE,
                 (new Notification.Builder(this, NOTIFICATION_CHANNEL_ID))
-                .setSmallIcon(R.drawable.stat_notify_update)
-                .setContentTitle(getString(R.string.state_action_ab_finished))
-                .setShowWhen(true)
-                .setContentIntent(getNotificationIntent(false))
-                .setDeleteIntent(getNotificationIntent(true))
-                .setContentText(flashFilename).build());
+                        .setSmallIcon(R.drawable.stat_notify_update)
+                        .setContentTitle(getString(R.string.state_action_ab_finished))
+                        .setShowWhen(true)
+                        .setContentIntent(getNotificationIntent(false))
+                        .setDeleteIntent(getNotificationIntent(true))
+                        .setContentText(flashFilename).build());
     }
 
     private void stopNotification() {
@@ -603,11 +605,11 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
             notificationManager.notify(
                     NOTIFICATION_ERROR,
                     (new Notification.Builder(this, NOTIFICATION_CHANNEL_ID))
-                    .setSmallIcon(R.drawable.stat_notify_error)
-                    .setContentTitle(getString(R.string.notify_title_error))
-                    .setContentText(errorStateString)
-                    .setShowWhen(true)
-                    .setContentIntent(getNotificationIntent(false)).build());
+                            .setSmallIcon(R.drawable.stat_notify_error)
+                            .setContentTitle(getString(R.string.notify_title_error))
+                            .setContentText(errorStateString)
+                            .setShowWhen(true)
+                            .setContentIntent(getNotificationIntent(false)).build());
         }
     }
 
@@ -615,7 +617,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
         notificationManager.cancel(NOTIFICATION_ERROR);
     }
 
-    private HttpsURLConnection setupHttpsRequest(String urlStr){
+    private HttpsURLConnection setupHttpsRequest(String urlStr) {
         URL url;
         HttpsURLConnection urlConnection;
         try {
@@ -644,7 +646,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
         HttpsURLConnection urlConnection = null;
         try {
             urlConnection = setupHttpsRequest(url);
-            if(urlConnection == null) {
+            if (urlConnection == null) {
                 return null;
             }
 
@@ -654,7 +656,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
                 int byteInt;
                 ByteArrayOutputStream byteArray = new ByteArrayOutputStream();
 
-                while((byteInt = is.read()) >= 0){
+                while ((byteInt = is.read()) >= 0) {
                     byteArray.write(byteInt);
                 }
 
@@ -679,7 +681,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
         HttpsURLConnection urlConnection = null;
         try {
             urlConnection = setupHttpsRequest(url);
-            if(urlConnection == null){
+            if (urlConnection == null) {
                 return null;
             }
 
@@ -687,12 +689,12 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
             ByteArrayOutputStream byteArray = new ByteArrayOutputStream();
             int byteInt;
 
-            while((byteInt = is.read()) >= 0){
+            while ((byteInt = is.read()) >= 0) {
                 byteArray.write(byteInt);
             }
 
             byte[] bytes = byteArray.toByteArray();
-            if(bytes == null){
+            if (bytes == null) {
                 return null;
             }
 
@@ -710,7 +712,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
     }
 
     private boolean downloadUrlFile(String url, File f, String matchSUM,
-            DeltaInfo.ProgressListener progressListener) {
+                                    DeltaInfo.ProgressListener progressListener) {
         Logger.d("download: %s", url);
 
         HttpsURLConnection urlConnection = null;
@@ -729,7 +731,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
 
         try {
             urlConnection = setupHttpsRequest(url);
-            if(urlConnection == null){
+            if (urlConnection == null) {
                 return false;
             }
             long len = urlConnection.getContentLength();
@@ -760,7 +762,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
                     StringBuilder SUM = new StringBuilder(new BigInteger(1, digest.digest())
                             .toString(16).toLowerCase(Locale.ENGLISH));
                     while (SUM.length() < 64)
-                         SUM.insert(0, "0");
+                        SUM.insert(0, "0");
                     boolean sumCheck = SUM.toString().equals(matchSUM);
                     Logger.d("SUM=" + SUM + " matchSUM=" + matchSUM);
                     Logger.d("SUM.length=" + SUM.length() +
@@ -786,7 +788,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
     }
 
     private boolean downloadUrlFileUnknownSize(String url, final File f,
-            String matchSUM) {
+                                               String matchSUM) {
         Logger.d("download: %s", url);
 
         HttpsURLConnection urlConnection = null;
@@ -807,7 +809,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
         try {
             updateState(STATE_ACTION_DOWNLOADING, 0f, 0L, 0L, f.getName(), null);
             urlConnection = setupHttpsRequest(url);
-            if(urlConnection == null){
+            if (urlConnection == null) {
                 return false;
             }
 
@@ -824,8 +826,8 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
                 return false;
             }
 
-            final long[] last = new long[] { 0, len, 0,
-                    SystemClock.elapsedRealtime() };
+            final long[] last = new long[]{0, len, 0,
+                    SystemClock.elapsedRealtime()};
             DeltaInfo.ProgressListener progressListener = new DeltaInfo.ProgressListener() {
                 @Override
                 public void onProgress(float progress, long current, long total) {
@@ -841,7 +843,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
                     }
                 }
 
-                public void setStatus(String s){
+                public void setStatus(String s) {
                     // do nothing
                 }
             };
@@ -873,7 +875,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
                     StringBuilder SUM = new StringBuilder(new BigInteger(1, digest.digest())
                             .toString(16).toLowerCase(Locale.ENGLISH));
                     while (SUM.length() < 64)
-                         SUM.insert(0, "0");
+                        SUM.insert(0, "0");
                     boolean sumCheck = SUM.toString().equals(matchSUM);
                     Logger.d("SUM=" + SUM + " matchSUM=" + matchSUM);
                     Logger.d("SUM.length=" + SUM.length() +
@@ -905,7 +907,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
         HttpsURLConnection urlConnection = null;
         try {
             urlConnection = setupHttpsRequest(url);
-            if(urlConnection == null){
+            if (urlConnection == null) {
                 return 0;
             }
 
@@ -925,7 +927,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
     private boolean isMatchingImage(String fileName) {
         try {
             Logger.d("Image check for file name: " + fileName);
-            if(fileName.endsWith(".zip") && fileName.contains(config.getDevice())) {
+            if (fileName.endsWith(".zip") && fileName.contains(config.getDevice())) {
                 String[] parts = fileName.split("-");
                 if (parts.length > 1) {
                     Logger.d("isMatchingImage: check " + fileName);
@@ -1014,7 +1016,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
 
     private DeltaInfo.ProgressListener getSUMProgress(String state,
                                                       String filename) {
-        final long[] last = new long[] { 0, SystemClock.elapsedRealtime() };
+        final long[] last = new long[]{0, SystemClock.elapsedRealtime()};
         final String _state = state;
         final String _filename = filename;
 
@@ -1028,6 +1030,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
                     last[0] = now;
                 }
             }
+
             public void setStatus(String s) {
                 // do nothing
             }
@@ -1042,8 +1045,8 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
     }
 
     private boolean downloadDeltaFile(String url_base,
-            DeltaInfo.FileBase fileBase, DeltaInfo.FileSizeSHA256 match,
-            DeltaInfo.ProgressListener progressListener, boolean force) {
+                                      DeltaInfo.FileBase fileBase, DeltaInfo.FileSizeSHA256 match,
+                                      DeltaInfo.ProgressListener progressListener, boolean force) {
         if (fileBase.getTag() == null) {
             if (force || networkState.getState()) {
                 String url = url_base + fileBase.getName();
@@ -1077,7 +1080,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
     }
 
     private Thread getThreadedProgress(String filename, String display,
-            long start, long currentOut, long totalOut) {
+                                       long start, long currentOut, long totalOut) {
         final File _file = new File(filename);
         final String _display = display;
         final long _currentOut = currentOut;
@@ -1103,7 +1106,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
     }
 
     private boolean zipadjust(String filenameIn, String filenameOut,
-            long start, long currentOut, long totalOut) {
+                              long start, long currentOut, long totalOut) {
         Logger.d("zipadjust [%s] --> [%s]", filenameIn, filenameOut);
 
         // checking file sizes in the background as progress, because these
@@ -1132,7 +1135,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
     }
 
     private boolean dedelta(String filenameSource, String filenameDelta,
-            String filenameOut, long start, long currentOut, long totalOut) {
+                            String filenameOut, long start, long currentOut, long totalOut) {
         Logger.d("dedelta [%s] --> [%s] --> [%s]", filenameSource,
                 filenameDelta, filenameOut);
 
@@ -1189,7 +1192,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
         stopErrorNotification();
 
         // so we have a time even in the error case
-        prefs.edit().putLong(PREF_LAST_CHECK_TIME_NAME, System.currentTimeMillis()).commit();
+        prefs.edit().putLong(PREF_LAST_CHECK_TIME_NAME, System.currentTimeMillis()).apply();
 
         if (!isSupportedVersion()) {
             // TODO - to be more generic this should maybe use the info from getNewestFullBuild
@@ -1255,7 +1258,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
                         true,
                         getSUMProgress(STATE_ACTION_CHECKING_SUM, lastDelta
                                 .getSignature().getName())) == lastDelta
-                                .getSignature().getUpdate()) {
+                        .getSignature().getUpdate()) {
                     lastDelta.getSignature().setTag(fn);
                 } else {
                     deltaDownloadSize += lastDelta.getSignature().getUpdate()
@@ -1307,7 +1310,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
     }
 
     private String findInitialFile(List<DeltaInfo> deltas,
-            String possibleMatch, boolean[] needsProcessing) {
+                                   String possibleMatch, boolean[] needsProcessing) {
         // Find the currently flashed ZIP
         Logger.d("findInitialFile possibleMatch = " + possibleMatch);
 
@@ -1355,12 +1358,12 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
 
         DeltaInfo lastDelta = deltas.get(deltas.size() - 1);
 
-        final String[] filename = new String[] { null };
+        final String[] filename = new String[]{null};
         updateState(STATE_ACTION_DOWNLOADING, 0f, 0L, totalDownloadSize, null,
                 null);
 
-        final long[] last = new long[] { 0, totalDownloadSize, 0,
-                SystemClock.elapsedRealtime() };
+        final long[] last = new long[]{0, totalDownloadSize, 0,
+                SystemClock.elapsedRealtime()};
         DeltaInfo.ProgressListener progressListener = new DeltaInfo.ProgressListener() {
             @Override
             public void onProgress(float progress, long current, long total) {
@@ -1371,10 +1374,11 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
                 if (now >= last[2] + 16L) {
                     updateState(STATE_ACTION_DOWNLOADING, progress, current,
                             total, filename[0], SystemClock.elapsedRealtime()
-                            - last[3]);
+                                    - last[3]);
                     last[2] = now;
                 }
             }
+
             public void setStatus(String s) {
                 // do nothing
             }
@@ -1394,7 +1398,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
             filename[0] = lastDelta.getSignature().getName();
             if (!downloadDeltaFile(config.getUrlBaseUpdate(),
                     lastDelta.getSignature(), lastDelta.getSignature()
-                    .getUpdate(), progressListener, force)) {
+                            .getUpdate(), progressListener, force)) {
                 return false;
             }
         }
@@ -1406,7 +1410,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
 
     private void downloadFullBuild(String url, String sha256Sum,
                                    String imageName) {
-        final String[] filename = new String[] { null };
+        final String[] filename = new String[]{null};
         filename[0] = imageName;
         String fn = config.getPathBase() + imageName;
         File f = new File(fn);
@@ -1414,7 +1418,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
 
         if (downloadUrlFileUnknownSize(url, f, sha256Sum)) {
             Logger.d("success");
-            prefs.edit().putString(PREF_READY_FILENAME_NAME, fn).commit();
+            prefs.edit().putString(PREF_READY_FILENAME_NAME, fn).apply();
         } else {
             f.delete();
             if (stopDownload) {
@@ -1429,7 +1433,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
 
     /**
      * @param url - url to sha256sum file
-     * @param fn - file name
+     * @param fn  - file name
      * @param ovr - whether direct link to sha256sum is provided
      * @return true if sha256sum matches the file
      */
@@ -1439,15 +1443,15 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
             url += urlSuffix;
         }
         String latestFullSUM = downloadUrlMemoryAsString(url);
-        if (latestFullSUM != null){
+        if (latestFullSUM != null) {
             try {
                 String fileSUM = getFileSHA256(new File(fn),
                         getSUMProgress(STATE_ACTION_CHECKING_SUM,
-                        new File(fn).getName()));
+                                new File(fn).getName()));
                 if (latestFullSUM.equals(fileSUM)) {
                     return true;
                 }
-            } catch(Exception e) {
+            } catch (Exception e) {
                 // WTH knows what can comes from the server
             }
         }
@@ -1455,15 +1459,15 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
     }
 
     private boolean applyPatches(List<DeltaInfo> deltas, String initialFile,
-            boolean initialFileNeedsProcessing) {
+                                 boolean initialFileNeedsProcessing) {
         // Create storeSigned outfile from infile + deltas
 
         DeltaInfo firstDelta = deltas.get(0);
         DeltaInfo lastDelta = deltas.get(deltas.size() - 1);
 
         int tempFile = 0;
-        String[] tempFiles = new String[] { config.getPathBase() + "temp1",
-                config.getPathBase() + "temp2" };
+        String[] tempFiles = new String[]{config.getPathBase() + "temp1",
+                config.getPathBase() + "temp2"};
         try {
             long start = SystemClock.elapsedRealtime();
             long current = 0L;
@@ -1495,10 +1499,10 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
                 String outFile = tempFiles[tempFile];
                 if (!config.getApplySignature() && (di == lastDelta))
                     outFile = config.getPathBase()
-                    + lastDelta.getOut().getName();
+                            + lastDelta.getOut().getName();
 
                 if (!dedelta(inFile, config.getPathBase()
-                        + di.getUpdate().getName(), outFile, start, current,
+                                + di.getUpdate().getName(), outFile, start, current,
                         total)) {
                     updateState(STATE_ERROR_UNKNOWN, null, null, null, null,
                             null);
@@ -1512,7 +1516,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
             if (config.getApplySignature()) {
                 if (!dedelta(tempFiles[(tempFile + 1) % 2],
                         config.getPathBase()
-                        + lastDelta.getSignature().getName(),
+                                + lastDelta.getSignature().getName(),
                         config.getPathBase() + lastDelta.getOut().getName(),
                         start, current, total)) {
                     updateState(STATE_ERROR_UNKNOWN, null, null, null, null,
@@ -1537,7 +1541,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
     private String handleUpdateCleanup() throws FileNotFoundException {
         String flashFilename = prefs.getString(PREF_READY_FILENAME_NAME, null);
         String initialFile = prefs.getString(PREF_INITIAL_FILE, null);
-        boolean fileFlash =  prefs.getBoolean(PREF_FILE_FLASH, false);
+        boolean fileFlash = prefs.getBoolean(PREF_FILE_FLASH, false);
 
         if (flashFilename == null
                 || (!fileFlash && !flashFilename.startsWith(config.getPathBase()))
@@ -1547,7 +1551,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
         // now delete the initial file
         if (initialFile != null
                 && new File(initialFile).exists()
-                && initialFile.startsWith(config.getPathBase())){
+                && initialFile.startsWith(config.getPathBase())) {
             new File(initialFile).delete();
             Logger.d("flashUpdate - delete initial file");
         }
@@ -1561,7 +1565,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
             String flashFilename = prefs.getString(PREF_READY_FILENAME_NAME, null);
             if (flashFilename != null) {
                 deleteOldFlashFile(flashFilename);
-                prefs.edit().putString(PREF_CURRENT_FILENAME_NAME, flashFilename).commit();
+                prefs.edit().putString(PREF_CURRENT_FILENAME_NAME, flashFilename).apply();
             }
             startABRebootNotification();
             updateState(STATE_ACTION_AB_FINISHED, null, null, null, null, null);
@@ -1577,16 +1581,16 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
             String sub;
             if (percent > 0) {
                 sub = String.format(Locale.ENGLISH,
-                                        getString(R.string.notify_eta_remaining),
-                                        percent, sec / 60, sec % 60);
+                        getString(R.string.notify_eta_remaining),
+                        percent, sec / 60, sec % 60);
             } else {
                 sub = String.format(Locale.ENGLISH,
-                                        "%2d%%",
-                                        percent);
+                        "%2d%%",
+                        percent);
             }
             mBuilder.setSubText(sub);
             notificationManager.notify(
-                        NOTIFICATION_UPDATE, mBuilder.build());
+                    NOTIFICATION_UPDATE, mBuilder.build());
         }
     }
 
@@ -1602,7 +1606,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
         }
 
         // Clear the Download size to hide while flashing
-        prefs.edit().putLong(PREF_DOWNLOAD_SIZE, -1).commit();
+        prefs.edit().putLong(PREF_DOWNLOAD_SIZE, -1).apply();
 
         final String _filename = new File(flashFilename).getName();
         updateState(STATE_ACTION_AB_FLASH, 0f, 0L, 100L, _filename, null);
@@ -1624,10 +1628,11 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
             boolean isABUpdate = ABUpdate.isABUpdate(zipFile);
             zipFile.close();
             if (isABUpdate) {
-                final long[] last = new long[] { 0, SystemClock.elapsedRealtime() };
+                final long[] last = new long[]{0, SystemClock.elapsedRealtime()};
 
                 DeltaInfo.ProgressListener listener = new DeltaInfo.ProgressListener() {
                     private String status;
+
                     @Override
                     public void onProgress(float progress, long current, long total) {
                         long now = SystemClock.elapsedRealtime();
@@ -1640,12 +1645,13 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
                             last[0] = now;
                         }
                     }
+
                     public void setStatus(String status) {
                         this.status = status;
                     }
                 };
                 listener.setStatus(_filename);
-                if(!ABUpdate.start(flashFilename, listener, this)) {
+                if (!ABUpdate.start(flashFilename, listener, this)) {
                     stopNotification();
                     updateState(STATE_ERROR_AB_FLASH, null, null, null, null, null);
                 }
@@ -1685,7 +1691,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
         }
 
         deleteOldFlashFile(flashFilename);
-        prefs.edit().putString(PREF_CURRENT_FILENAME_NAME, flashFilename).commit();
+        prefs.edit().putString(PREF_CURRENT_FILENAME_NAME, flashFilename).apply();
         clearState();
 
         // Remove the path to the storage from the filename, so we get a path
@@ -1905,34 +1911,11 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
         return true;
     }
 
-    public static boolean isProgressState(String state) {
-        return state.equals(UpdateService.STATE_ACTION_DOWNLOADING) ||
-                state.equals(UpdateService.STATE_ACTION_SEARCHING) ||
-                state.equals(UpdateService.STATE_ACTION_SEARCHING_SUM) ||
-                state.equals(UpdateService.STATE_ACTION_CHECKING) ||
-                state.equals(UpdateService.STATE_ACTION_CHECKING_SUM) ||
-                state.equals(UpdateService.STATE_ACTION_APPLYING) ||
-                state.equals(UpdateService.STATE_ACTION_APPLYING_SUM) ||
-                state.equals(UpdateService.STATE_ACTION_APPLYING_PATCH) ||
-                state.equals(UpdateService.STATE_ACTION_AB_FLASH);
-    }
-
-    public static boolean isErrorState(String state) {
-        return state.equals(UpdateService.STATE_ERROR_DOWNLOAD) ||
-                state.equals(UpdateService.STATE_ERROR_DISK_SPACE) ||
-                state.equals(UpdateService.STATE_ERROR_UNKNOWN) ||
-                state.equals(UpdateService.STATE_ERROR_UNOFFICIAL) ||
-                state.equals(UpdateService.STATE_ERROR_CONNECTION) ||
-                state.equals(UpdateService.STATE_ERROR_AB_FLASH) ||
-                state.equals(UpdateService.STATE_ERROR_FLASH_FILE) ||
-                state.equals(UpdateService.STATE_ERROR_FLASH);
-    }
-
     private boolean isSnoozeNotification() {
         // check if we're snoozed, using abs for clock changes
         boolean timeSnooze = Math.abs(System.currentTimeMillis()
                 - prefs.getLong(PREF_LAST_SNOOZE_TIME_NAME,
-                        PREF_LAST_SNOOZE_TIME_DEFAULT)) <= SNOOZE_MS;
+                PREF_LAST_SNOOZE_TIME_DEFAULT)) <= SNOOZE_MS;
         if (timeSnooze) {
             String lastBuild = prefs.getString(PREF_LATEST_FULL_NAME, null);
             String snoozeBuild = prefs.getString(PREF_SNOOZE_UPDATE_NAME, null);
@@ -1947,12 +1930,12 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
     }
 
     private void clearState() {
-        prefs.edit().putString(PREF_LATEST_FULL_NAME, null).commit();
-        prefs.edit().putString(PREF_LATEST_DELTA_NAME, null).commit();
-        prefs.edit().putString(PREF_READY_FILENAME_NAME, null).commit();
-        prefs.edit().putLong(PREF_DOWNLOAD_SIZE, -1).commit();
-        prefs.edit().putBoolean(PREF_DELTA_SIGNATURE, false).commit();
-        prefs.edit().putString(PREF_INITIAL_FILE, null).commit();
+        prefs.edit().putString(PREF_LATEST_FULL_NAME, null).apply();
+        prefs.edit().putString(PREF_LATEST_DELTA_NAME, null).apply();
+        prefs.edit().putString(PREF_READY_FILENAME_NAME, null).apply();
+        prefs.edit().putLong(PREF_DOWNLOAD_SIZE, -1).apply();
+        prefs.edit().putBoolean(PREF_DELTA_SIGNATURE, false).apply();
+        prefs.edit().putString(PREF_INITIAL_FILE, null).apply();
     }
 
     private void shouldShowErrorNotification() {
@@ -1973,7 +1956,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
         Logger.d("checkForUpdatesAsync " + getPrefs().getAll());
 
         updateState(STATE_ACTION_CHECKING, null, null, null, null, null);
-        wakeLock.acquire();
+        wakeLock.acquire(10 * 60 * 1000L /*10 minutes*/);
         wifiLock.acquire();
 
         String notificationText = getString(R.string.state_action_checking);
@@ -2022,12 +2005,11 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
                             latestFullBuild + config.getUrlSuffix();
                     latestFullFetchSUM = config.getUrlBaseFullSum() +
                             latestFullBuild + ".sha256sum" + config.getUrlSuffix();
-                }
-                else {
+                } else {
                     latestFullFetch = latestFullBuildWithUrl.get(1);
                 }
                 Logger.d("latest full build for device " + config.getDevice() + " is " + latestFullFetch);
-                prefs.edit().putString(PREF_LATEST_FULL_NAME, latestFullBuild).commit();
+                prefs.edit().putString(PREF_LATEST_FULL_NAME, latestFullBuild).apply();
 
                 if (!Config.isABDevice()) {
                     // Create a list of deltas to apply to get from our current
@@ -2078,7 +2060,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
                         Logger.d("delta --> [%s]", delta.getOut().getName());
                         fetch = String.format(Locale.ENGLISH, "%s%s.delta",
                                 config.getUrlBaseDelta(), delta
-                                .getOut().getName().replace(".zip", ""));
+                                        .getOut().getName().replace(".zip", ""));
                         deltas.add(delta);
                     }
                 }
@@ -2101,7 +2083,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
                                 Logger.d("match found (%s): %s", signedFile ? "delta" : "full", di.getOut().getName());
                                 flashFilename = fn;
                                 last = i;
-                                prefs.edit().putBoolean(PREF_DELTA_SIGNATURE, signedFile).commit();
+                                prefs.edit().putBoolean(PREF_DELTA_SIGNATURE, signedFile).apply();
                                 break;
                             }
                         }
@@ -2120,12 +2102,12 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
                 if (deltas.size() == 0) {
                     // we found a matching zip created from deltas before
                     if (flashFilename != null) {
-                        prefs.edit().putString(PREF_READY_FILENAME_NAME, flashFilename).commit();
+                        prefs.edit().putString(PREF_READY_FILENAME_NAME, flashFilename).apply();
                         return;
                     }
                     // only full download available
                     final String latestFull = prefs.getString(PREF_LATEST_FULL_NAME, null);
-                    String currentVersionZip = config.getFilenameBase() +".zip";
+                    String currentVersionZip = config.getFilenameBase() + ".zip";
 
                     long currFileDate; // will store current build date as YYYYMMDD
                     long latestFileDate; // will store latest build date as YYYYMMDD
@@ -2144,7 +2126,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
                     }
 
                     if (!updateAvailable) {
-                        prefs.edit().putString(PREF_LATEST_FULL_NAME, null).commit();
+                        prefs.edit().putString(PREF_LATEST_FULL_NAME, null).apply();
                     }
 
                     if (downloadFullBuild) {
@@ -2155,7 +2137,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
                                     (directSUM ? latestFullBuildWithUrl.get(2) : latestFullFetchSUM),
                                     fn, directSUM)) {
                                 Logger.d("match found (full): " + fn);
-                                prefs.edit().putString(PREF_READY_FILENAME_NAME, fn).commit();
+                                prefs.edit().putString(PREF_READY_FILENAME_NAME, fn).apply();
                                 downloadFullBuild = false;
                             } else {
                                 Logger.d("sha256sum check failed : " + fn);
@@ -2164,7 +2146,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
                     }
                     if (updateAvailable && downloadFullBuild) {
                         long size = getUrlDownloadSize(latestFullFetch);
-                        prefs.edit().putLong(PREF_DOWNLOAD_SIZE, size).commit();
+                        prefs.edit().putLong(PREF_DOWNLOAD_SIZE, size).apply();
                     }
                     Logger.d("check donne: latest full build available = " + prefs.getString(PREF_LATEST_FULL_NAME, null) +
                             " : updateAvailable = " + updateAvailable + " : downloadFullBuild = " + downloadFullBuild);
@@ -2186,7 +2168,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
                     String initialFile;
                     boolean initialFileNeedsProcessing;
                     {
-                        boolean[] needsProcessing = new boolean[] {
+                        boolean[] needsProcessing = new boolean[]{
                                 false
                         };
                         initialFile = findInitialFile(deltas, flashFilename, needsProcessing);
@@ -2203,12 +2185,12 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
 
                     String latestDeltaZip = latestDelta != null ? new File(latestDelta).getName() : null;
                     String latestFullZip = latestFull;
-                    String currentVersionZip = config.getFilenameBase() +".zip";
-                    boolean fullUpdatePossible = latestFullZip != null && Long.parseLong(latestFullZip.replaceAll("\\D+","")) > Long.parseLong(currentVersionZip.replaceAll("\\D+",""));
-                    boolean deltaUpdatePossible = initialFile != null && latestDeltaZip != null && Long.parseLong(latestDeltaZip.replaceAll("\\D+","")) > Long.parseLong(currentVersionZip.replaceAll("\\D+","")) && latestDeltaZip.equals(latestFullZip);
+                    String currentVersionZip = config.getFilenameBase() + ".zip";
+                    boolean fullUpdatePossible = latestFullZip != null && Long.parseLong(latestFullZip.replaceAll("\\D+", "")) > Long.parseLong(currentVersionZip.replaceAll("\\D+", ""));
+                    boolean deltaUpdatePossible = initialFile != null && latestDeltaZip != null && Long.parseLong(latestDeltaZip.replaceAll("\\D+", "")) > Long.parseLong(currentVersionZip.replaceAll("\\D+", "")) && latestDeltaZip.equals(latestFullZip);
 
                     // is the full version newer then what we could create with delta?
-                    if (latestFullZip.compareTo(latestDeltaZip) > 0) {
+                    if (latestFullZip != null && latestFullZip.compareTo(latestDeltaZip) > 0) {
                         betterDownloadFullBuild = true;
                     }
 
@@ -2222,13 +2204,14 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
                     boolean updateAvailable = fullUpdatePossible || deltaUpdatePossible;
 
                     if (!updateAvailable) {
-                        prefs.edit().putString(PREF_LATEST_DELTA_NAME, null).commit();
-                        prefs.edit().putString(PREF_LATEST_FULL_NAME, null).commit();
+                        prefs.edit().putString(PREF_LATEST_DELTA_NAME, null).apply();
+                        prefs.edit().putString(PREF_LATEST_FULL_NAME, null).apply();
                     } else {
                         if (downloadFullBuild) {
-                            prefs.edit().putString(PREF_LATEST_DELTA_NAME, null).commit();
+                            prefs.edit().putString(PREF_LATEST_DELTA_NAME, null).apply();
                         } else {
-                            prefs.edit().putString(PREF_LATEST_DELTA_NAME, new File(flashFilename).getName()).commit();
+                            prefs.edit().putString(PREF_LATEST_DELTA_NAME,
+                                    new File(flashFilename).getName()).apply();
                         }
                     }
 
@@ -2240,7 +2223,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
                                     (directSUM ? latestFullBuildWithUrl.get(2) : latestFullFetchSUM),
                                     fn, directSUM)) {
                                 Logger.d("match found (full): " + fn);
-                                prefs.edit().putString(PREF_READY_FILENAME_NAME, fn).commit();
+                                prefs.edit().putString(PREF_READY_FILENAME_NAME, fn).apply();
                                 downloadFullBuild = false;
                             } else {
                                 Logger.d("sha256sum check failed : " + fn);
@@ -2249,9 +2232,9 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
                     }
                     if (updateAvailable) {
                         if (deltaUpdatePossible) {
-                            prefs.edit().putLong(PREF_DOWNLOAD_SIZE, deltaDownloadSize).commit();
+                            prefs.edit().putLong(PREF_DOWNLOAD_SIZE, deltaDownloadSize).apply();
                         } else if (downloadFullBuild) {
-                            prefs.edit().putLong(PREF_DOWNLOAD_SIZE, fullDownloadSize).commit();
+                            prefs.edit().putLong(PREF_DOWNLOAD_SIZE, fullDownloadSize).apply();
                         }
                     }
                     Logger.d("check donne: latest valid delta update = " + prefs.getString(PREF_LATEST_DELTA_NAME, null) +
@@ -2308,11 +2291,11 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
                         // the possibility to do delta updates
                         if (initialFile != null) {
                             if (initialFile.startsWith(config.getPathBase())) {
-                                prefs.edit().putString(PREF_INITIAL_FILE, initialFile).commit();
+                                prefs.edit().putString(PREF_INITIAL_FILE, initialFile).apply();
                             }
                         }
-                        prefs.edit().putBoolean(PREF_DELTA_SIGNATURE, true).commit();
-                        prefs.edit().putString(PREF_READY_FILENAME_NAME, flashFilename).commit();
+                        prefs.edit().putBoolean(PREF_DELTA_SIGNATURE, true).apply();
+                        prefs.edit().putString(PREF_READY_FILENAME_NAME, flashFilename).apply();
                     }
                 }
                 if (downloadFullBuild && checkOnly == PREF_AUTO_DOWNLOAD_FULL) {
@@ -2330,7 +2313,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
                     }
                 }
             } finally {
-                prefs.edit().putLong(PREF_LAST_CHECK_TIME_NAME, System.currentTimeMillis()).commit();
+                prefs.edit().putLong(PREF_LAST_CHECK_TIME_NAME, System.currentTimeMillis()).apply();
                 stopForeground(true);
                 if (wifiLock.isHeld()) wifiLock.release();
                 if (wakeLock.isHeld()) wakeLock.release();
@@ -2354,7 +2337,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
         if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 != PackageManager.PERMISSION_GRANTED ||
                 checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)
-                != PackageManager.PERMISSION_GRANTED) {
+                        != PackageManager.PERMISSION_GRANTED) {
             Logger.d("checkPermissions failed");
             updateState(STATE_ERROR_PERMISSIONS, null, null, null, null, null);
             return false;
@@ -2396,7 +2379,7 @@ OnWantUpdateCheckListener, OnSharedPreferenceChangeListener {
             return;
         }
         Logger.d("Set flash possible: %s", flashFilename);
-        prefs.edit().putString(PREF_READY_FILENAME_NAME, flashFilename).commit();
+        prefs.edit().putString(PREF_READY_FILENAME_NAME, flashFilename).apply();
         updateState(STATE_ACTION_FLASH_FILE_READY, null, null, null, (new File(flashFilename)).getName(), null);
     }
 

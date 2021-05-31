@@ -21,14 +21,9 @@
 
 package eu.chainfire.opendelta;
 
-import java.io.File;
-import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.Locale;
-
 import android.Manifest;
-import android.app.Activity;
 import android.app.ActionBar;
+import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -48,8 +43,8 @@ import android.os.UpdateEngine;
 import android.preference.PreferenceManager;
 import android.provider.DocumentsContract;
 import android.text.Html;
-import android.text.format.Formatter;
 import android.text.TextUtils;
+import android.text.format.Formatter;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -59,7 +54,17 @@ import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
+import java.io.File;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Locale;
+
 public class MainActivity extends Activity {
+    private static final int PERMISSIONS_REQUEST_WRITE_EXTERNAL_STORAGE = 0;
+    private static final int ACTIVITY_SELECT_FLASH_FILE = 1;
+    private static final String COLON = ":";
+    private final IntentFilter updateFilter = new IntentFilter(
+            UpdateService.BROADCAST_INTENT);
     private TextView title = null;
     private TextView sub = null;
     private ProgressBar progress = null;
@@ -67,6 +72,12 @@ public class MainActivity extends Activity {
     private Button flashNow = null;
     private TextView updateVersion = null;
     private Button buildNow = null;
+    private final Runnable flashStart = () -> {
+        checkNow.setEnabled(false);
+        flashNow.setEnabled(false);
+        buildNow.setEnabled(false);
+        UpdateService.startFlash(MainActivity.this);
+    };
     private ImageButton stopNow = null;
     private Button rebootNow = null;
     private TextView currentVersion = null;
@@ -76,6 +87,68 @@ public class MainActivity extends Activity {
     private TextView downloadSizeHeader = null;
     private TextView downloadSize = null;
     private Config config;
+    private final Runnable flashWarningFlashAfterUpdateZIPs = new Runnable() {
+        @Override
+        public void run() {
+            // If we're in secure mode, but additional ZIPs to flash have been
+            // detected, warn the user that these will not be flashed
+
+            final Runnable next = flashStart;
+
+            if (config.getSecureModeCurrent()
+                    && (config.getFlashAfterUpdateZIPs().size() > 0)) {
+                (new AlertDialog.Builder(MainActivity.this))
+                        .setTitle(R.string.flash_after_update_notice_title)
+                        .setMessage(
+                                Html.fromHtml(getString(R.string.flash_after_update_notice_description)))
+                        .setCancelable(true)
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .setPositiveButton(android.R.string.ok, (dialog, which) -> next.run()).show();
+            } else {
+                next.run();
+            }
+        }
+    };
+    private final Runnable flashRecoveryWarning = new Runnable() {
+        @Override
+        public void run() {
+            // Show a warning message about recoveries we support, depending
+            // on the state of secure mode and if we've shown the message before
+
+            final Runnable next = flashWarningFlashAfterUpdateZIPs;
+
+            CharSequence message = null;
+            if (!config.getSecureModeCurrent()
+                    && !config.getShownRecoveryWarningNotSecure()) {
+                message = Html
+                        .fromHtml(getString(R.string.recovery_notice_description_not_secure));
+                config.setShownRecoveryWarningNotSecure();
+            } else if (config.getSecureModeCurrent()
+                    && !config.getShownRecoveryWarningSecure()) {
+                message = Html
+                        .fromHtml(getString(R.string.recovery_notice_description_secure));
+                config.setShownRecoveryWarningSecure();
+            }
+
+            if (message != null) {
+                (new AlertDialog.Builder(MainActivity.this))
+                        .setTitle(R.string.recovery_notice_title)
+                        .setMessage(message)
+                        .setCancelable(true)
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .setPositiveButton(android.R.string.ok,
+                                new OnClickListener() {
+                                    @Override
+                                    public void onClick(DialogInterface dialog,
+                                                        int which) {
+                                        next.run();
+                                    }
+                                }).show();
+            } else {
+                next.run();
+            }
+        }
+    };
     private boolean mPermOk;
     private TextView mSub2;
     private TextView mProgressPercent;
@@ -87,114 +160,6 @@ public class MainActivity extends Activity {
     private SharedPreferences mPrefs;
     private TextView mUpdateVersionTitle;
     private TextView mExtraText;
-    private TextView mInfoText;
-    private ImageView mInfoImage;
-
-    private static final int PERMISSIONS_REQUEST_WRITE_EXTERNAL_STORAGE = 0;
-    private static final int ACTIVITY_SELECT_FLASH_FILE = 1;
-    private static final String COLON = ":";
-
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        mPrefs = PreferenceManager.getDefaultSharedPreferences(this);
-
-        try {
-            getActionBar().setIcon(
-                    getPackageManager().getApplicationIcon(
-                            "com.android.settings"));
-        } catch (NameNotFoundException e) {
-            // The standard Settings package is not present, so we can't snatch
-            // its icon
-            Logger.ex(e);
-        }
-        getActionBar().setDisplayOptions(ActionBar.DISPLAY_HOME_AS_UP | ActionBar.DISPLAY_SHOW_TITLE);
-
-        setContentView(R.layout.activity_main);
-
-        title = findViewById(R.id.text_title);
-        sub = findViewById(R.id.progress_text);
-        mSub2 = findViewById(R.id.progress_text2);
-        progress = findViewById(R.id.progress_bar);
-        checkNow = findViewById(R.id.button_check_now);
-        flashNow = findViewById(R.id.button_flash_now);
-        rebootNow = findViewById(R.id.button_reboot_now);
-        updateVersion = findViewById(R.id.text_update_version);
-        buildNow = findViewById(R.id.button_build_delta);
-        stopNow = findViewById(R.id.button_stop);
-        currentVersion = findViewById(R.id.text_current_version);
-        currentVersionHeader = findViewById(R.id.text_current_version_header);
-        lastChecked = findViewById(R.id.text_last_checked);
-        lastCheckedHeader = findViewById(R.id.text_last_checked_header);
-        downloadSize = findViewById(R.id.text_download_size);
-        downloadSizeHeader = findViewById(R.id.text_download_size_header);
-        mProgressPercent = findViewById(R.id.progress_percent);
-        mProgressEndSpace = findViewById(R.id.progress_end_margin);
-        mFileFlashButton = findViewById(R.id.button_select_file);
-        mUpdateVersionTitle = findViewById(R.id.text_update_version_header);
-        mExtraText = findViewById(R.id.extra_text);
-        mInfoText = findViewById(R.id.info_text);
-        mInfoImage = findViewById(R.id.info_image);
-
-        config = Config.getInstance(this);
-        mPermOk = false;
-        requestPermissions();
-        updateInfoVisibility();
-    }
-
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.main, menu);
-        return true;
-    }
-
-    private void showAbout() {
-        int thisYear = Calendar.getInstance().get(Calendar.YEAR);
-        String opendelta = (thisYear == 2013) ? "2013" : "2013-"
-                + thisYear;
-        String xdelta = (thisYear == 1997) ? "1997" : "1997-"
-                + thisYear;
-
-        AlertDialog dialog = (new AlertDialog.Builder(this))
-                .setTitle(R.string.app_name)
-                .setMessage(
-                        Html.fromHtml(getString(R.string.about_content)
-                                .replace("_COPYRIGHT_OPENDELTA_", opendelta)
-                                .replace("_COPYRIGHT_XDELTA_", xdelta)))
-                .setNeutralButton(android.R.string.ok, null)
-                .setCancelable(true).show();
-        TextView textView = dialog
-                .findViewById(android.R.id.message);
-        if (textView != null)
-            textView.setTypeface(title.getTypeface());
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        switch (item.getItemId()) {
-        case android.R.id.home:
-            finish();
-            return true;
-        case R.id.settings:
-            Intent settingsActivity = new Intent(this, SettingsActivity.class);
-            startActivity(settingsActivity);
-            return true;
-        case R.id.changelog:
-            Intent changelogActivity = new Intent(Intent.ACTION_VIEW,
-                    Uri.parse(config.getUrlBaseJson().replace(
-                    config.getDevice() + ".json", "Changelog.txt")));
-            startActivity(changelogActivity);
-            return true;
-        case R.id.action_about:
-            showAbout();
-            return true;
-        default:
-            return super.onOptionsItemSelected(item);
-        }
-    }
-
-    private final IntentFilter updateFilter = new IntentFilter(
-            UpdateService.BROADCAST_INTENT);
     private final BroadcastReceiver updateReceiver = new BroadcastReceiver() {
         private String formatLastChecked(long ms) {
             //Date date = new Date(ms);
@@ -244,6 +209,7 @@ public class MainActivity extends Activity {
             try {
                 versionType = versionParts[3];
             } catch (Exception e) {
+                e.printStackTrace();
             }
 
             String state = intent.getStringExtra(UpdateService.EXTRA_STATE);
@@ -339,7 +305,7 @@ public class MainActivity extends Activity {
                 progress.setIndeterminate(false);
                 final String flashImage = mPrefs.getString(
                         UpdateService.PREF_READY_FILENAME_NAME, null);
-                mPrefs.edit().putBoolean(UpdateService.PREF_FILE_FLASH, true).commit();
+                mPrefs.edit().putBoolean(UpdateService.PREF_FILE_FLASH, true).apply();
                 String flashImageBase = flashImage != null ? new File(
                         flashImage).getName() : null;
                 if (flashImageBase != null) {
@@ -360,9 +326,9 @@ public class MainActivity extends Activity {
                             flashImageBase.lastIndexOf('.'));
                 }
 
-                mPrefs.edit().putString(UpdateService.PREF_READY_FILENAME_NAME, null).commit();
-                mPrefs.edit().putBoolean(UpdateService.PREF_FILE_FLASH, false).commit();
-                mPrefs.edit().putString(UpdateService.PREF_LATEST_FULL_NAME, null).commit();
+                mPrefs.edit().putString(UpdateService.PREF_READY_FILENAME_NAME, null).apply();
+                mPrefs.edit().putBoolean(UpdateService.PREF_FILE_FLASH, false).apply();
+                mPrefs.edit().putString(UpdateService.PREF_LATEST_FULL_NAME, null).apply();
 
             } else if (UpdateService.STATE_ACTION_BUILD.equals(state)) {
                 enableCheck = true;
@@ -394,7 +360,7 @@ public class MainActivity extends Activity {
                 }
                 long downloadSize = mPrefs.getLong(
                         UpdateService.PREF_DOWNLOAD_SIZE, -1);
-                if(downloadSize == -1) {
+                if (downloadSize == -1) {
                     downloadSizeText = "";
                 } else if (downloadSize == 0) {
                     downloadSizeText = getString(R.string.text_download_size_unknown);
@@ -421,7 +387,7 @@ public class MainActivity extends Activity {
 
                 long downloadSize = mPrefs.getLong(
                         UpdateService.PREF_DOWNLOAD_SIZE, -1);
-                if(downloadSize == -1) {
+                if (downloadSize == -1) {
                     downloadSizeText = "";
                 } else if (downloadSize == 0) {
                     downloadSizeText = getString(R.string.text_download_size_unknown);
@@ -453,7 +419,7 @@ public class MainActivity extends Activity {
                     sub = filename;
                     long ms = intent.getLongExtra(UpdateService.EXTRA_MS, 0);
                     progressPercent = String.format(Locale.ENGLISH, "%.0f %%",
-                                intent.getFloatExtra(UpdateService.EXTRA_PROGRESS, 0));
+                            intent.getFloatExtra(UpdateService.EXTRA_PROGRESS, 0));
 
                     if ((ms > 500) && (current > 0) && (total > 0)) {
                         float kibps = ((float) current / 1024f)
@@ -461,7 +427,7 @@ public class MainActivity extends Activity {
                         if (progressInK)
                             kibps *= 1024f;
                         int sec = (int) (((((float) total / (float) current) * (float) ms) - ms) / 1000f);
-                        if(disableDataSpeed) {
+                        if (disableDataSpeed) {
                             sub2 = String.format(Locale.ENGLISH,
                                     "%02d:%02d",
                                     sec / 60, sec % 60);
@@ -485,7 +451,7 @@ public class MainActivity extends Activity {
             MainActivity.this.mProgressPercent.setText(progressPercent);
             MainActivity.this.updateVersion.setText(updateVersion);
             MainActivity.this.mUpdateVersionTitle
-                .setText(TextUtils.isEmpty(updateVersion) ? "" : (getString(R.string.text_update_version_title) + COLON));
+                    .setText(TextUtils.isEmpty(updateVersion) ? "" : (getString(R.string.text_update_version_title) + COLON));
             MainActivity.this.currentVersion.setText(config.getFilenameBase());
             MainActivity.this.currentVersionHeader.setText(String.format("%s%s", getString(R.string.text_current_version_header_title), COLON));
             MainActivity.this.lastChecked.setText(lastCheckedText);
@@ -493,7 +459,7 @@ public class MainActivity extends Activity {
             MainActivity.this.mExtraText.setText(extraText);
             MainActivity.this.downloadSize.setText(downloadSizeText);
             MainActivity.this.downloadSizeHeader
-                .setText(TextUtils.isEmpty(downloadSizeText) ? "" : (getString(R.string.text_download_size_header_title) + COLON));
+                    .setText(TextUtils.isEmpty(downloadSizeText) ? "" : (getString(R.string.text_download_size_header_title) + COLON));
 
             mProgressCurrent = (int) current;
             mProgressMax = (int) total;
@@ -516,6 +482,106 @@ public class MainActivity extends Activity {
             mProgressEndSpace.setVisibility(enableStop ? View.VISIBLE : View.GONE);
         }
     };
+    private TextView mInfoText;
+    private ImageView mInfoImage;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        mPrefs = PreferenceManager.getDefaultSharedPreferences(this);
+
+        try {
+            getActionBar().setIcon(
+                    getPackageManager().getApplicationIcon(
+                            "com.android.settings"));
+        } catch (NameNotFoundException e) {
+            // The standard Settings package is not present, so we can't snatch
+            // its icon
+            Logger.ex(e);
+        }
+        getActionBar().setDisplayOptions(ActionBar.DISPLAY_HOME_AS_UP | ActionBar.DISPLAY_SHOW_TITLE);
+
+        setContentView(R.layout.activity_main);
+
+        title = findViewById(R.id.text_title);
+        sub = findViewById(R.id.progress_text);
+        mSub2 = findViewById(R.id.progress_text2);
+        progress = findViewById(R.id.progress_bar);
+        checkNow = findViewById(R.id.button_check_now);
+        flashNow = findViewById(R.id.button_flash_now);
+        rebootNow = findViewById(R.id.button_reboot_now);
+        updateVersion = findViewById(R.id.text_update_version);
+        buildNow = findViewById(R.id.button_build_delta);
+        stopNow = findViewById(R.id.button_stop);
+        currentVersion = findViewById(R.id.text_current_version);
+        currentVersionHeader = findViewById(R.id.text_current_version_header);
+        lastChecked = findViewById(R.id.text_last_checked);
+        lastCheckedHeader = findViewById(R.id.text_last_checked_header);
+        downloadSize = findViewById(R.id.text_download_size);
+        downloadSizeHeader = findViewById(R.id.text_download_size_header);
+        mProgressPercent = findViewById(R.id.progress_percent);
+        mProgressEndSpace = findViewById(R.id.progress_end_margin);
+        mFileFlashButton = findViewById(R.id.button_select_file);
+        mUpdateVersionTitle = findViewById(R.id.text_update_version_header);
+        mExtraText = findViewById(R.id.extra_text);
+        mInfoText = findViewById(R.id.info_text);
+        mInfoImage = findViewById(R.id.info_image);
+
+        config = Config.getInstance(this);
+        mPermOk = false;
+        requestPermissions();
+        updateInfoVisibility();
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.main, menu);
+        return true;
+    }
+
+    private void showAbout() {
+        int thisYear = Calendar.getInstance().get(Calendar.YEAR);
+        String opendelta = (thisYear == 2013) ? "2013" : "2013-"
+                + thisYear;
+        String xdelta = (thisYear == 1997) ? "1997" : "1997-"
+                + thisYear;
+
+        AlertDialog dialog = (new AlertDialog.Builder(this))
+                .setTitle(R.string.app_name)
+                .setMessage(
+                        Html.fromHtml(getString(R.string.about_content)
+                                .replace("_COPYRIGHT_OPENDELTA_", opendelta)
+                                .replace("_COPYRIGHT_XDELTA_", xdelta)))
+                .setNeutralButton(android.R.string.ok, null)
+                .setCancelable(true).show();
+        TextView textView = dialog
+                .findViewById(android.R.id.message);
+        if (textView != null)
+            textView.setTypeface(title.getTypeface());
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        int itemId = item.getItemId();
+        if (itemId == android.R.id.home) {
+            finish();
+            return true;
+        } else if (itemId == R.id.settings) {
+            Intent settingsActivity = new Intent(this, SettingsActivity.class);
+            startActivity(settingsActivity);
+            return true;
+        } else if (itemId == R.id.changelog) {
+            Intent changelogActivity = new Intent(Intent.ACTION_VIEW,
+                    Uri.parse(config.getUrlBaseJson().replace(
+                            config.getDevice() + ".json", "Changelog.txt")));
+            startActivity(changelogActivity);
+            return true;
+        } else if (itemId == R.id.action_about) {
+            showAbout();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
 
     @Override
     protected void onStart() {
@@ -539,7 +605,7 @@ public class MainActivity extends Activity {
     }
 
     public void onButtonCheckNowClick(View v) {
-        mPrefs.edit().putBoolean(SettingsActivity.PREF_START_HINT_SHOWN, true).commit();
+        mPrefs.edit().putBoolean(SettingsActivity.PREF_START_HINT_SHOWN, true).apply();
         UpdateService.startCheck(this);
     }
 
@@ -568,92 +634,19 @@ public class MainActivity extends Activity {
         stopDownload();
     }
 
-    private final Runnable flashRecoveryWarning = new Runnable() {
-        @Override
-        public void run() {
-            // Show a warning message about recoveries we support, depending
-            // on the state of secure mode and if we've shown the message before
-
-            final Runnable next = flashWarningFlashAfterUpdateZIPs;
-
-            CharSequence message = null;
-            if (!config.getSecureModeCurrent()
-                    && !config.getShownRecoveryWarningNotSecure()) {
-                message = Html
-                        .fromHtml(getString(R.string.recovery_notice_description_not_secure));
-                config.setShownRecoveryWarningNotSecure();
-            } else if (config.getSecureModeCurrent()
-                    && !config.getShownRecoveryWarningSecure()) {
-                message = Html
-                        .fromHtml(getString(R.string.recovery_notice_description_secure));
-                config.setShownRecoveryWarningSecure();
-            }
-
-            if (message != null) {
-                (new AlertDialog.Builder(MainActivity.this))
-                        .setTitle(R.string.recovery_notice_title)
-                        .setMessage(message)
-                        .setCancelable(true)
-                        .setNegativeButton(android.R.string.cancel, null)
-                        .setPositiveButton(android.R.string.ok,
-                                new OnClickListener() {
-                                    @Override
-                                    public void onClick(DialogInterface dialog,
-                                            int which) {
-                                        next.run();
-                                    }
-                                }).show();
-            } else {
-                next.run();
-            }
-        }
-    };
-
-    private final Runnable flashWarningFlashAfterUpdateZIPs = new Runnable() {
-        @Override
-        public void run() {
-            // If we're in secure mode, but additional ZIPs to flash have been
-            // detected, warn the user that these will not be flashed
-
-            final Runnable next = flashStart;
-
-            if (config.getSecureModeCurrent()
-                    && (config.getFlashAfterUpdateZIPs().size() > 0)) {
-                (new AlertDialog.Builder(MainActivity.this))
-                        .setTitle(R.string.flash_after_update_notice_title)
-                        .setMessage(
-                                Html.fromHtml(getString(R.string.flash_after_update_notice_description)))
-                        .setCancelable(true)
-                        .setNegativeButton(android.R.string.cancel, null)
-                        .setPositiveButton(android.R.string.ok, (dialog, which) -> next.run()).show();
-            } else {
-                next.run();
-            }
-        }
-    };
-
-    private final Runnable flashStart = () -> {
-        checkNow.setEnabled(false);
-        flashNow.setEnabled(false);
-        buildNow.setEnabled(false);
-        UpdateService.startFlash(MainActivity.this);
-    };
-
     private void stopDownload() {
-        mPrefs.edit()
-                .putBoolean(
-                        UpdateService.PREF_STOP_DOWNLOAD,
-                        !mPrefs.getBoolean(UpdateService.PREF_STOP_DOWNLOAD,
-                                false)).commit();
+        mPrefs.edit().putBoolean(UpdateService.PREF_STOP_DOWNLOAD,
+                !mPrefs.getBoolean(UpdateService.PREF_STOP_DOWNLOAD,
+                        false)).apply();
     }
 
     private void requestPermissions() {
         if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 != PackageManager.PERMISSION_GRANTED ||
                 checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)
-                != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[] { Manifest.permission.WRITE_EXTERNAL_STORAGE,
-                    Manifest.permission.READ_EXTERNAL_STORAGE },
+                        != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                            Manifest.permission.READ_EXTERNAL_STORAGE},
                     PERMISSIONS_REQUEST_WRITE_EXTERNAL_STORAGE);
         } else {
             mPermOk = true;

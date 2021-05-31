@@ -1,20 +1,20 @@
-/* 
+/*
  * Copyright (C) 2013-2014 Jorrit "Chainfire" Jongma
  * Copyright (C) 2013-2014 The OmniROM Project
  */
-/* 
+/*
  * This file is part of OpenDelta.
- * 
+ *
  * OpenDelta is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- * 
+ *
  * OpenDelta is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with OpenDelta. If not, see <http://www.gnu.org/licenses/>.
  */
@@ -26,17 +26,12 @@ import android.net.ConnectivityManager;
 import android.net.Network;
 
 public class NetworkState {
-    public interface OnNetworkStateListener {
-        void onNetworkState(boolean state);
-    }
-
     private Context context = null;
     private OnNetworkStateListener onNetworkStateListener = null;
     private volatile Boolean stateLast = null;
     private boolean mIsConnected;
     private boolean mIsMetered;
     private boolean mIsMeteredAllowed;
-
     private ConnectivityManager mConnectivityManager;
     private final ConnectivityManager.NetworkCallback mNetworkCallback = new ConnectivityManager.NetworkCallback() {
         @Override
@@ -104,5 +99,9 @@ public class NetworkState {
 
     public boolean isMetered() {
         return mIsMetered;
+    }
+
+    public interface OnNetworkStateListener {
+        void onNetworkState(boolean state);
     }
 }

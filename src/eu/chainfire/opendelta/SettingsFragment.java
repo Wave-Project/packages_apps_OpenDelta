@@ -17,6 +17,24 @@
  */
 package eu.chainfire.opendelta;
 
+import android.app.AlertDialog;
+import android.app.TimePickerDialog;
+import android.app.TimePickerDialog.OnTimeSetListener;
+import android.content.SharedPreferences;
+import android.os.Bundle;
+import android.text.Html;
+import android.text.format.DateFormat;
+import android.widget.TimePicker;
+import android.widget.Toast;
+
+import androidx.preference.ListPreference;
+import androidx.preference.Preference;
+import androidx.preference.Preference.OnPreferenceChangeListener;
+import androidx.preference.PreferenceCategory;
+import androidx.preference.PreferenceFragment;
+import androidx.preference.PreferenceManager;
+import androidx.preference.SwitchPreference;
+
 import java.io.File;
 import java.text.DateFormatSymbols;
 import java.util.ArrayList;
@@ -25,26 +43,7 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.Locale;
 
-import android.app.AlertDialog;
-import android.app.TimePickerDialog;
-import android.app.TimePickerDialog.OnTimeSetListener;
-import android.content.DialogInterface;
-import android.content.DialogInterface.OnClickListener;
-import android.content.DialogInterface.OnMultiChoiceClickListener;
-import android.content.SharedPreferences;
-import android.os.Bundle;
-import androidx.preference.SwitchPreference;
-import androidx.preference.ListPreference;
-import androidx.preference.Preference;
-import androidx.preference.Preference.OnPreferenceChangeListener;
-import androidx.preference.PreferenceFragment;
-import androidx.preference.PreferenceCategory;
-import androidx.preference.PreferenceManager;
-import androidx.preference.PreferenceScreen;
-import android.text.Html;
-import android.text.format.DateFormat;
-import android.widget.TimePicker;
-import android.widget.Toast;
+import co.aospa.hub.R;
 
 public class SettingsFragment extends PreferenceFragment implements
         OnPreferenceChangeListener, OnTimeSetListener {
@@ -79,100 +78,118 @@ public class SettingsFragment extends PreferenceFragment implements
         mConfig = Config.getInstance(getContext());
 
         addPreferencesFromResource(R.xml.settings);
-        mNetworksConfig = (SwitchPreference) findPreference(KEY_NETWORKS);
-        mNetworksConfig.setChecked(prefs.getBoolean(UpdateService.PREF_AUTO_UPDATE_METERED_NETWORKS, false));
+        mNetworksConfig = findPreference(KEY_NETWORKS);
+        if (mNetworksConfig != null) {
+            mNetworksConfig.setChecked(prefs.getBoolean(UpdateService.PREF_AUTO_UPDATE_METERED_NETWORKS,
+                    false));
+        }
 
-        String autoDownload = prefs.getString(SettingsActivity.PREF_AUTO_DOWNLOAD, getDefaultAutoDownloadValue());
-        int autoDownloadValue = Integer.valueOf(autoDownload);
-        mAutoDownload = (ListPreference) findPreference(SettingsActivity.PREF_AUTO_DOWNLOAD);
-        mAutoDownload.setOnPreferenceChangeListener(this);
-        mAutoDownload.setValue(autoDownload);
-        mAutoDownload.setSummary(mAutoDownload.getEntry());
-
-        mBatteryLevel = (ListPreference) findPreference(SettingsActivity.PREF_BATTERY_LEVEL);
-        mBatteryLevel.setOnPreferenceChangeListener(this);
-        mBatteryLevel.setSummary(mBatteryLevel.getEntry());
-        mChargeOnly = (SwitchPreference) findPreference(SettingsActivity.PREF_CHARGE_ONLY);
+        String autoDownload = prefs.getString(SettingsActivity.PREF_AUTO_DOWNLOAD,
+                getDefaultAutoDownloadValue());
+        int autoDownloadValue = Integer.parseInt(autoDownload);
+        mAutoDownload = findPreference(SettingsActivity.PREF_AUTO_DOWNLOAD);
+        if (mAutoDownload != null) {
+            mAutoDownload.setOnPreferenceChangeListener(this);
+            mAutoDownload.setValue(autoDownload);
+            mAutoDownload.setSummary(mAutoDownload.getEntry());
+        }
+        mBatteryLevel = findPreference(SettingsActivity.PREF_BATTERY_LEVEL);
+        if (mBatteryLevel != null) {
+            mBatteryLevel.setOnPreferenceChangeListener(this);
+            mBatteryLevel.setSummary(mBatteryLevel.getEntry());
+        }
+        mChargeOnly = findPreference(SettingsActivity.PREF_CHARGE_ONLY);
         mBatteryLevel.setEnabled(!prefs.getBoolean(SettingsActivity.PREF_CHARGE_ONLY, true));
-        mSecureMode = (SwitchPreference) findPreference(KEY_SECURE_MODE);
-        mSecureMode.setEnabled(mConfig.getSecureModeEnable());
-        mSecureMode.setChecked(mConfig.getSecureModeCurrent());
-        mABPerfMode = (SwitchPreference) findPreference(KEY_AB_PERF_MODE);
-        mABPerfMode.setChecked(mConfig.getABPerfModeCurrent());
-        mABPerfMode.setOnPreferenceChangeListener(this);
-        mFileFlash = (SwitchPreference) findPreference(SettingsActivity.PREF_FILE_FLASH);
-        mShowInfo = (SwitchPreference) findPreference(KEY_SHOW_INFO);
-        mShowInfo.setChecked(mConfig.getShowInfo());
+        mSecureMode = findPreference(KEY_SECURE_MODE);
+        if (mSecureMode != null) {
+            mSecureMode.setEnabled(mConfig.getSecureModeEnable());
+            mSecureMode.setChecked(mConfig.getSecureModeCurrent());
+        }
+        mABPerfMode = findPreference(KEY_AB_PERF_MODE);
+        if (mABPerfMode != null) {
+            mABPerfMode.setChecked(mConfig.getABPerfModeCurrent());
+            mABPerfMode.setOnPreferenceChangeListener(this);
+        }
+        mFileFlash = findPreference(SettingsActivity.PREF_FILE_FLASH);
+        mShowInfo = findPreference(KEY_SHOW_INFO);
+        if (mShowInfo != null) {
+            mShowInfo.setChecked(mConfig.getShowInfo());
+        }
 
-        mAutoDownloadCategory = (PreferenceCategory) findPreference(KEY_CATEGORY_DOWNLOAD);
+        mAutoDownloadCategory = findPreference(KEY_CATEGORY_DOWNLOAD);
         PreferenceCategory flashingCategory =
-                (PreferenceCategory) findPreference(KEY_CATEGORY_FLASHING);
+                findPreference(KEY_CATEGORY_FLASHING);
 
-        if (!Config.isABDevice()) {
+        if (!Config.isABDevice() && flashingCategory != null) {
             flashingCategory.removePreference(mABPerfMode);
             flashingCategory.removePreference(mFileFlash);
         }
 
-        mAutoDownloadCategory
-                .setEnabled(autoDownloadValue > UpdateService.PREF_AUTO_DOWNLOAD_CHECK);
+        mAutoDownloadCategory.setEnabled(autoDownloadValue > UpdateService.PREF_AUTO_DOWNLOAD_CHECK);
 
-        mSchedulerMode = (ListPreference) findPreference(SettingsActivity.PREF_SCHEDULER_MODE);
-        mSchedulerMode.setOnPreferenceChangeListener(this);
-        mSchedulerMode.setSummary(mSchedulerMode.getEntry());
-        mSchedulerMode
-                .setEnabled(autoDownloadValue > UpdateService.PREF_AUTO_DOWNLOAD_DISABLED);
+        mSchedulerMode = findPreference(SettingsActivity.PREF_SCHEDULER_MODE);
+        if (mSchedulerMode != null) {
+            mSchedulerMode.setOnPreferenceChangeListener(this);
+            mSchedulerMode.setSummary(mSchedulerMode.getEntry());
+            mSchedulerMode.setEnabled(autoDownloadValue > UpdateService.PREF_AUTO_DOWNLOAD_DISABLED);
+        }
 
-        String schedulerMode = prefs.getString(SettingsActivity.PREF_SCHEDULER_MODE, SettingsActivity.PREF_SCHEDULER_MODE_SMART);
-        mSchedulerDailyTime = (Preference) findPreference(SettingsActivity.PREF_SCHEDULER_DAILY_TIME);
-        mSchedulerDailyTime.setEnabled(!schedulerMode.equals(SettingsActivity.PREF_SCHEDULER_MODE_SMART));
-        mSchedulerDailyTime.setSummary(prefs.getString(
-                SettingsActivity.PREF_SCHEDULER_DAILY_TIME, "00:00"));
+        String schedulerMode = prefs.getString(SettingsActivity.PREF_SCHEDULER_MODE,
+                SettingsActivity.PREF_SCHEDULER_MODE_SMART);
+        mSchedulerDailyTime = findPreference(SettingsActivity.PREF_SCHEDULER_DAILY_TIME);
+        if (mSchedulerDailyTime != null) {
+            mSchedulerDailyTime.setEnabled(!schedulerMode.equals(SettingsActivity.PREF_SCHEDULER_MODE_SMART));
+            mSchedulerDailyTime.setSummary(prefs.getString(SettingsActivity.PREF_SCHEDULER_DAILY_TIME,
+                    "00:00"));
+        }
 
-        mCleanFiles = (Preference) findPreference(PREF_CLEAN_FILES);
+        mCleanFiles = findPreference(PREF_CLEAN_FILES);
 
-        mScheduleWeekDay = (ListPreference) findPreference(SettingsActivity.PREF_SCHEDULER_WEEK_DAY);
-        mScheduleWeekDay.setEntries(getWeekdays());
-        mScheduleWeekDay.setSummary(mScheduleWeekDay.getEntry());
-        mScheduleWeekDay.setOnPreferenceChangeListener(this);
-        mScheduleWeekDay.setEnabled(schedulerMode.equals(SettingsActivity.PREF_SCHEDULER_MODE_WEEKLY));
+        mScheduleWeekDay = findPreference(SettingsActivity.PREF_SCHEDULER_WEEK_DAY);
+        if (mScheduleWeekDay != null) {
+            mScheduleWeekDay.setEntries(getWeekdays());
+            mScheduleWeekDay.setSummary(mScheduleWeekDay.getEntry());
+            mScheduleWeekDay.setOnPreferenceChangeListener(this);
+            mScheduleWeekDay.setEnabled(schedulerMode.equals(SettingsActivity.PREF_SCHEDULER_MODE_WEEKLY));
+        }
     }
 
     @Override
     public boolean onPreferenceTreeClick(Preference preference) {
-        if (preference == mNetworksConfig) {
+        if (preference.equals(mNetworksConfig)) {
             boolean value = ((SwitchPreference) preference).isChecked();
             SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
-            prefs.edit().putBoolean(UpdateService.PREF_AUTO_UPDATE_METERED_NETWORKS, value).commit();
+            prefs.edit().putBoolean(UpdateService.PREF_AUTO_UPDATE_METERED_NETWORKS, value).apply();
             return true;
-        } else if (preference == mChargeOnly) {
+        } else if (preference.equals(mChargeOnly)) {
             boolean value = ((SwitchPreference) preference).isChecked();
             mBatteryLevel.setEnabled(!value);
             return true;
-        } else if (preference == mSecureMode) {
+        } else if (preference.equals(mSecureMode)) {
             boolean value = ((SwitchPreference) preference).isChecked();
             mConfig.setSecureModeCurrent(value);
             (new AlertDialog.Builder(getContext()))
-                    .setTitle(
-                            value ? R.string.secure_mode_enabled_title
-                                    : R.string.secure_mode_disabled_title)
-                    .setMessage(
-                            Html.fromHtml(getString(value ? R.string.secure_mode_enabled_description
-                                    : R.string.secure_mode_disabled_description)))
+                    .setTitle(value
+                            ? R.string.secure_mode_enabled_title
+                            : R.string.secure_mode_disabled_title)
+                    .setMessage(Html.fromHtml(getString(value
+                            ? R.string.secure_mode_enabled_description
+                            : R.string.secure_mode_disabled_description)))
                     .setCancelable(true)
                     .setPositiveButton(android.R.string.ok, null).show();
             return true;
-        } else if (preference == mSchedulerDailyTime) {
+        } else if (preference.equals(mSchedulerDailyTime)) {
             showTimePicker();
             return true;
-        } else if (preference == mCleanFiles) {
+        } else if (preference.equals(mCleanFiles)) {
             int numDeletedFiles = cleanFiles();
             SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
             clearState(prefs);
-            prefs.edit().putBoolean(SettingsActivity.PREF_START_HINT_SHOWN, false).commit();
+            prefs.edit().putBoolean(SettingsActivity.PREF_START_HINT_SHOWN, false).apply();
             Toast.makeText(getContext(), String.format(getString(R.string.clean_files_feedback),
                     numDeletedFiles), Toast.LENGTH_LONG).show();
             return true;
-        } else if (preference == mFileFlash) {
+        } else if (preference.equals(mFileFlash)) {
             SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
             if (!prefs.getBoolean(PREF_FILE_FLASH_HINT_SHOWN, false)) {
                 (new AlertDialog.Builder(getContext()))
@@ -181,7 +198,7 @@ public class SettingsFragment extends PreferenceFragment implements
                         .setCancelable(true)
                         .setPositiveButton(android.R.string.ok, null).show();
             }
-            prefs.edit().putBoolean(PREF_FILE_FLASH_HINT_SHOWN, true).commit();
+            prefs.edit().putBoolean(PREF_FILE_FLASH_HINT_SHOWN, true).apply();
             return true;
         }
         return false;
@@ -189,24 +206,22 @@ public class SettingsFragment extends PreferenceFragment implements
 
     @Override
     public boolean onPreferenceChange(Preference preference, Object newValue) {
-        if (preference == mAutoDownload) {
+        if (preference.equals(mAutoDownload)) {
             String value = (String) newValue;
             int idx = mAutoDownload.findIndexOfValue(value);
             mAutoDownload.setSummary(mAutoDownload.getEntries()[idx]);
             mAutoDownload.setValueIndex(idx);
-            int autoDownloadValue = Integer.valueOf(value);
-            mAutoDownloadCategory
-                    .setEnabled(autoDownloadValue > UpdateService.PREF_AUTO_DOWNLOAD_CHECK);
-            mSchedulerMode
-                    .setEnabled(autoDownloadValue > UpdateService.PREF_AUTO_DOWNLOAD_DISABLED);
+            int autoDownloadValue = Integer.parseInt(value);
+            mAutoDownloadCategory.setEnabled(autoDownloadValue > UpdateService.PREF_AUTO_DOWNLOAD_CHECK);
+            mSchedulerMode.setEnabled(autoDownloadValue > UpdateService.PREF_AUTO_DOWNLOAD_DISABLED);
             return true;
-        } else if (preference == mBatteryLevel) {
+        } else if (preference.equals(mBatteryLevel)) {
             String value = (String) newValue;
             int idx = mBatteryLevel.findIndexOfValue(value);
             mBatteryLevel.setSummary(mBatteryLevel.getEntries()[idx]);
             mBatteryLevel.setValueIndex(idx);
             return true;
-        } else if (preference == mSchedulerMode) {
+        } else if (preference.equals(mSchedulerMode)) {
             String value = (String) newValue;
             int idx = mSchedulerMode.findIndexOfValue(value);
             mSchedulerMode.setSummary(mSchedulerMode.getEntries()[idx]);
@@ -214,7 +229,7 @@ public class SettingsFragment extends PreferenceFragment implements
             mSchedulerDailyTime.setEnabled(!value.equals(SettingsActivity.PREF_SCHEDULER_MODE_SMART));
             mScheduleWeekDay.setEnabled(value.equals(SettingsActivity.PREF_SCHEDULER_MODE_WEEKLY));
             return true;
-        } else if (preference == mScheduleWeekDay) {
+        } else if (preference.equals(mScheduleWeekDay)) {
             int idx = mScheduleWeekDay.findIndexOfValue((String) newValue);
             mScheduleWeekDay.setSummary(mScheduleWeekDay.getEntries()[idx]);
             return true;
@@ -230,11 +245,9 @@ public class SettingsFragment extends PreferenceFragment implements
 
     @Override
     public void onTimeSet(TimePicker view, int hourOfDay, int minute) {
-        SharedPreferences prefs = PreferenceManager
-                .getDefaultSharedPreferences(getContext());
-        String prefValue = String.format(Locale.ENGLISH, "%02d:%02d",
-                hourOfDay, minute);
-        prefs.edit().putString(SettingsActivity.PREF_SCHEDULER_DAILY_TIME, prefValue).commit();
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getContext());
+        String prefValue = String.format(Locale.ENGLISH, "%02d:%02d", hourOfDay, minute);
+        prefs.edit().putString(SettingsActivity.PREF_SCHEDULER_DAILY_TIME, prefValue).apply();
         mSchedulerDailyTime.setSummary(prefValue);
     }
 
@@ -248,7 +261,9 @@ public class SettingsFragment extends PreferenceFragment implements
     }
 
     private String getDefaultAutoDownloadValue() {
-        return isSupportedVersion() ? UpdateService.PREF_AUTO_DOWNLOAD_CHECK_STRING : UpdateService.PREF_AUTO_DOWNLOAD_DISABLED_STRING;
+        return isSupportedVersion()
+                ? UpdateService.PREF_AUTO_DOWNLOAD_CHECK_STRING
+                : UpdateService.PREF_AUTO_DOWNLOAD_DISABLED_STRING;
     }
 
     private boolean isSupportedVersion() {
@@ -272,17 +287,16 @@ public class SettingsFragment extends PreferenceFragment implements
 
     private String[] getWeekdays() {
         DateFormatSymbols dfs = new DateFormatSymbols();
-        List<String> weekDayList = new ArrayList<>();
-        weekDayList.addAll(Arrays.asList(dfs.getWeekdays()).subList(1, dfs.getWeekdays().length));
-        return weekDayList.toArray(new String[weekDayList.size()]);
+        List<String> weekDayList = new ArrayList<>(Arrays.asList(dfs.getWeekdays()).subList(1, dfs.getWeekdays().length));
+        return weekDayList.toArray(new String[0]);
     }
 
     private void clearState(SharedPreferences prefs) {
-        prefs.edit().putString(UpdateService.PREF_LATEST_FULL_NAME, null).commit();
-        prefs.edit().putString(UpdateService.PREF_LATEST_DELTA_NAME, null).commit();
-        prefs.edit().putString(UpdateService.PREF_READY_FILENAME_NAME, null).commit();
-        prefs.edit().putLong(UpdateService.PREF_DOWNLOAD_SIZE, -1).commit();
-        prefs.edit().putBoolean(UpdateService.PREF_DELTA_SIGNATURE, false).commit();
-        prefs.edit().putString(UpdateService.PREF_INITIAL_FILE, null).commit();
+        prefs.edit().putString(UpdateService.PREF_LATEST_FULL_NAME, null).apply();
+        prefs.edit().putString(UpdateService.PREF_LATEST_DELTA_NAME, null).apply();
+        prefs.edit().putString(UpdateService.PREF_READY_FILENAME_NAME, null).apply();
+        prefs.edit().putLong(UpdateService.PREF_DOWNLOAD_SIZE, -1).apply();
+        prefs.edit().putBoolean(UpdateService.PREF_DELTA_SIGNATURE, false).apply();
+        prefs.edit().putString(UpdateService.PREF_INITIAL_FILE, null).apply();
     }
 }

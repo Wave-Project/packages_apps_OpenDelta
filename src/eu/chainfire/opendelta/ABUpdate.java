@@ -19,17 +19,16 @@ import android.os.UpdateEngine;
 import android.os.UpdateEngineCallback;
 import android.util.Log;
 
-import java.util.Enumeration;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
-
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 
 import eu.chainfire.opendelta.DeltaInfo.ProgressListener;
 
@@ -52,6 +51,7 @@ class ABUpdate {
     private final UpdateEngineCallback mUpdateEngineCallback = new UpdateEngineCallback() {
         float lastPercent;
         int offset = 0;
+
         @Override
         public void onStatusUpdate(int status, float percent) {
             if (!isInstallingUpdate(mUpdateService)) {
@@ -75,9 +75,9 @@ class ABUpdate {
             lastPercent = percent;
             if (mProgressListener != null) {
                 mProgressListener.setStatus(mUpdateService.getString(mUpdateService.getResources().getIdentifier(
-                    "progress_status_" + status, "string", mUpdateService.getPackageName())));
+                        "progress_status_" + status, "string", mUpdateService.getPackageName())));
                 mProgressListener.onProgress(percent * 50f + (float) offset,
-                    (long) Math.round(percent * 50) + (long) offset, 100L);
+                        (long) Math.round(percent * 50) + (long) offset, 100L);
             }
         }
 
@@ -95,8 +95,16 @@ class ABUpdate {
         }
     };
 
+    private ABUpdate(String zipPath, ProgressListener listener,
+                     UpdateService us) {
+        this.zipPath = zipPath;
+        this.mProgressListener = listener;
+        this.mUpdateService = us;
+        this.enableABPerfMode = mUpdateService.getConfig().getABPerfModeCurrent();
+    }
+
     static synchronized boolean start(String zipPath, ProgressListener listener,
-            UpdateService us) {
+                                      UpdateService us) {
         if (isInstallingUpdate(us)) {
             return false;
         }
@@ -111,54 +119,7 @@ class ABUpdate {
     }
 
     static synchronized void setInstallingUpdate(boolean installing, UpdateService us) {
-        us.getPrefs().edit()
-                .putBoolean(PREFS_IS_INSTALLING_UPDATE, installing).commit();
-    }
-
-    private ABUpdate(String zipPath, ProgressListener listener,
-                UpdateService us) {
-        this.zipPath = zipPath;
-        this.mProgressListener = listener;
-        this.mUpdateService = us;
-        this.enableABPerfMode = mUpdateService.getConfig().getABPerfModeCurrent();
-    }
-
-    private boolean startUpdate() {
-        File file = new File(zipPath);
-        if (!file.exists()) {
-            Log.e(TAG, "The given update doesn't exist");
-            return false;
-        }
-
-        long offset;
-        String[] headerKeyValuePairs;
-        try {
-            ZipFile zipFile = new ZipFile(file);
-            offset = getZipEntryOffset(zipFile, PAYLOAD_BIN_PATH);
-            ZipEntry payloadPropEntry = zipFile.getEntry(PAYLOAD_PROPERTIES_PATH);
-            try (InputStream is = zipFile.getInputStream(payloadPropEntry);
-                 InputStreamReader isr = new InputStreamReader(is);
-                 BufferedReader br = new BufferedReader(isr)) {
-                List<String> lines = new ArrayList<>();
-                for (String line; (line = br.readLine()) != null;) {
-                    lines.add(line);
-                }
-                headerKeyValuePairs = new String[lines.size()];
-                headerKeyValuePairs = lines.toArray(headerKeyValuePairs);
-            }
-            zipFile.close();
-        } catch (IOException | IllegalArgumentException e) {
-            Log.e(TAG, "Could not prepare " + file, e);
-            return false;
-        }
-
-        UpdateEngine updateEngine = new UpdateEngine();
-        updateEngine.setPerformanceMode(enableABPerfMode);
-        updateEngine.bind(mUpdateEngineCallback);
-        String zipFileUri = "file://" + file.getAbsolutePath();
-        updateEngine.applyPayload(zipFileUri, offset, 0, headerKeyValuePairs);
-
-        return true;
+        us.getPrefs().edit().putBoolean(PREFS_IS_INSTALLING_UPDATE, installing).apply();
     }
 
     static boolean isABUpdate(ZipFile zipFile) {
@@ -169,7 +130,7 @@ class ABUpdate {
     /**
      * Get the offset to the compressed data of a file inside the given zip
      *
-     * @param zipFile input zip file
+     * @param zipFile   input zip file
      * @param entryPath full path of the entry
      * @return the offset of the compressed, or -1 if not found
      * @throws IOException
@@ -196,5 +157,43 @@ class ABUpdate {
         }
         Log.e(TAG, "Entry " + entryPath + " not found");
         throw new IllegalArgumentException("The given entry was not found");
+    }
+
+    private boolean startUpdate() {
+        File file = new File(zipPath);
+        if (!file.exists()) {
+            Log.e(TAG, "The given update doesn't exist");
+            return false;
+        }
+
+        long offset;
+        String[] headerKeyValuePairs;
+        try {
+            ZipFile zipFile = new ZipFile(file);
+            offset = getZipEntryOffset(zipFile, PAYLOAD_BIN_PATH);
+            ZipEntry payloadPropEntry = zipFile.getEntry(PAYLOAD_PROPERTIES_PATH);
+            try (InputStream is = zipFile.getInputStream(payloadPropEntry);
+                 InputStreamReader isr = new InputStreamReader(is);
+                 BufferedReader br = new BufferedReader(isr)) {
+                List<String> lines = new ArrayList<>();
+                for (String line; (line = br.readLine()) != null; ) {
+                    lines.add(line);
+                }
+                headerKeyValuePairs = new String[lines.size()];
+                headerKeyValuePairs = lines.toArray(headerKeyValuePairs);
+            }
+            zipFile.close();
+        } catch (IOException | IllegalArgumentException e) {
+            Log.e(TAG, "Could not prepare " + file, e);
+            return false;
+        }
+
+        UpdateEngine updateEngine = new UpdateEngine();
+        updateEngine.setPerformanceMode(enableABPerfMode);
+        updateEngine.bind(mUpdateEngineCallback);
+        String zipFileUri = "file://" + file.getAbsolutePath();
+        updateEngine.applyPayload(zipFileUri, offset, 0, headerKeyValuePairs);
+
+        return true;
     }
 }

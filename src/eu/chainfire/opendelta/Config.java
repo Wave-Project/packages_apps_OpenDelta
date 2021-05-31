@@ -36,7 +36,115 @@ import java.util.List;
 import java.util.Locale;
 
 public class Config {
+    private final static String PREF_SECURE_MODE_NAME = "secure_mode";
+    private final static String PREF_SHOWN_RECOVERY_WARNING_SECURE_NAME = "shown_recovery_warning_secure";
+    private final static String PREF_SHOWN_RECOVERY_WARNING_NOT_SECURE_NAME = "shown_recovery_warning_not_secure";
+    private final static String PREF_SHOW_INFO_NAME = "show_info";
+    private final static String PREF_AB_PERF_MODE_NAME = "ab_perf_mode";
+    private final static boolean PREF_AB_PERF_MODE_DEFAULT = true;
+    private static final String PROP_AB_DEVICE = "ro.build.ab_update";
     private static Config instance = null;
+    private final SharedPreferences prefs;
+    private final String propertyVersion;
+    private final String propertyDevice;
+    private final String filenameBase;
+    private final String pathBase;
+    private final String pathFlashAfterUpdate;
+    private final String urlBaseDelta;
+    private final String urlBaseUpdate;
+    private final String urlBaseFull;
+    private final String urlBaseFullSum;
+    private final String urlBaseSuffix;
+    private final boolean applySignature;
+    private final boolean injectSignatureEnable;
+    private final String injectSignatureKeys;
+    private final boolean secureModeEnable;
+    private final boolean secureModeDefault;
+    private final boolean keepScreenOn;
+    private final String filenameBasePrefix;
+    private final String urlBaseJson;
+    private final String officialVersionTag;
+    private final String androidVersion;
+    private final String weeklyVersionTag;
+    private final String securityVersionTag;
+
+    private Config(Context context) {
+        prefs = PreferenceManager.getDefaultSharedPreferences(context);
+
+        Resources res = context.getResources();
+
+        propertyVersion = getProperty(context,
+                res.getString(R.string.property_version));
+        propertyDevice = getProperty(context,
+                res.getString(R.string.property_device));
+        filenameBase = String.format(Locale.ENGLISH,
+                res.getString(R.string.filename_base), propertyVersion);
+
+        pathBase = String.format(Locale.ENGLISH, "%s%s%s%s", Environment
+                        .getExternalStorageDirectory().getAbsolutePath(),
+                File.separator, res.getString(R.string.path_base),
+                File.separator);
+        pathFlashAfterUpdate = String.format(Locale.ENGLISH, "%s%s%s",
+                pathBase, "FlashAfterUpdate", File.separator);
+        urlBaseDelta = String.format(Locale.ENGLISH,
+                res.getString(R.string.url_base_delta), propertyDevice);
+        urlBaseUpdate = String.format(Locale.ENGLISH,
+                res.getString(R.string.url_base_update), propertyDevice);
+        urlBaseFull = String.format(
+                res.getString(R.string.url_base_full), propertyDevice);
+        urlBaseFullSum = String.format(
+                res.getString(R.string.url_base_full_sum), propertyDevice);
+        urlBaseSuffix = res.getString(R.string.url_base_suffix);
+        applySignature = res.getBoolean(R.bool.apply_signature);
+        injectSignatureEnable = res
+                .getBoolean(R.bool.inject_signature_enable);
+        injectSignatureKeys = res.getString(R.string.inject_signature_keys);
+        secureModeEnable = res.getBoolean(R.bool.secure_mode_enable);
+        secureModeDefault = res.getBoolean(R.bool.secure_mode_default);
+        urlBaseJson = String.format(
+                res.getString(R.string.url_base_json),
+                propertyDevice, propertyDevice);
+        officialVersionTag = res.getString(R.string.official_version_tag);
+        weeklyVersionTag = res.getString(R.string.weekly_version_tag);
+        securityVersionTag = res.getString(R.string.security_version_tag);
+        androidVersion = getProperty(context,
+                res.getString(R.string.android_version));
+        filenameBasePrefix = String.format(Locale.ENGLISH,
+                res.getString(R.string.filename_base), androidVersion);
+        boolean keep_screen_on = false;
+        try {
+            String[] devices = res.getStringArray(R.array.keep_screen_on_devices);
+            if (devices != null) {
+                for (String device : devices) {
+                    if (propertyDevice != null && propertyDevice.equals(device)) {
+                        keep_screen_on = true;
+                        break;
+                    }
+                }
+            }
+        } catch (Resources.NotFoundException e) {
+            e.printStackTrace();
+        }
+        this.keepScreenOn = keep_screen_on;
+
+        Logger.d("property_version: %s", propertyVersion);
+        Logger.d("property_device: %s", propertyDevice);
+        Logger.d("filename_base: %s", filenameBase);
+        Logger.d("filename_base_prefix: %s", filenameBasePrefix);
+        Logger.d("path_base: %s", pathBase);
+        Logger.d("path_flash_after_update: %s", pathFlashAfterUpdate);
+        Logger.d("url_base_delta: %s", urlBaseDelta);
+        Logger.d("url_base_update: %s", urlBaseUpdate);
+        Logger.d("url_base_full: %s", urlBaseFull);
+        Logger.d("url_base_full_sum: %s", urlBaseFullSum);
+        Logger.d("url_base_json: %s", urlBaseJson);
+        Logger.d("apply_signature: %d", applySignature ? 1 : 0);
+        Logger.d("inject_signature_enable: %d", injectSignatureEnable ? 1 : 0);
+        Logger.d("inject_signature_keys: %s", injectSignatureKeys);
+        Logger.d("secure_mode_enable: %d", secureModeEnable ? 1 : 0);
+        Logger.d("secure_mode_default: %d", secureModeDefault ? 1 : 0);
+        Logger.d("keep_screen_on: %d", keep_screen_on ? 1 : 0);
+    }
 
     public static Config getInstance(Context context) {
         if (instance == null) {
@@ -45,38 +153,9 @@ public class Config {
         return instance;
     }
 
-    private final static String PREF_SECURE_MODE_NAME = "secure_mode";
-    private final static String PREF_SHOWN_RECOVERY_WARNING_SECURE_NAME = "shown_recovery_warning_secure";
-    private final static String PREF_SHOWN_RECOVERY_WARNING_NOT_SECURE_NAME = "shown_recovery_warning_not_secure";
-    private final static String PREF_SHOW_INFO_NAME = "show_info";
-    private final static String PREF_AB_PERF_MODE_NAME = "ab_perf_mode";
-    private final static boolean PREF_AB_PERF_MODE_DEFAULT = true;
-    private static final String PROP_AB_DEVICE = "ro.build.ab_update";
-
-    private final SharedPreferences prefs;
-
-    private final String property_version;
-    private final String property_device;
-    private final String filename_base;
-    private final String path_base;
-    private final String path_flash_after_update;
-    private final String url_base_delta;
-    private final String url_base_update;
-    private final String url_base_full;
-    private final String url_base_full_sum;
-    private final String url_base_suffix;
-    private final boolean apply_signature;
-    private final boolean inject_signature_enable;
-    private final String inject_signature_keys;
-    private final boolean secure_mode_enable;
-    private final boolean secure_mode_default;
-    private final boolean keep_screen_on;
-    private final String filename_base_prefix;
-    private final String url_base_json;
-    private final String official_version_tag;
-    private final String android_version;
-    private final String weekly_version_tag;
-    private final String security_version_tag;
+    public static boolean isABDevice() {
+        return SystemProperties.getBoolean(PROP_AB_DEVICE, false);
+    }
 
     /*
      * Using reflection voodoo instead calling the hidden class directly, to
@@ -87,7 +166,7 @@ public class Config {
             Class<?> SystemProperties = context.getClassLoader().loadClass(
                     "android.os.SystemProperties");
             Method get = SystemProperties.getMethod("get", String.class, String.class);
-            return (String) get.invoke(null, new Object[] { key, ""});
+            return (String) get.invoke(null, new Object[]{key, ""});
         } catch (Exception e) {
             // A lot of voodoo could go wrong here, return failure instead of
             // crash
@@ -96,118 +175,40 @@ public class Config {
         return null;
     }
 
-    private Config(Context context) {
-        prefs = PreferenceManager.getDefaultSharedPreferences(context);
-
-        Resources res = context.getResources();
-
-        property_version = getProperty(context,
-                res.getString(R.string.property_version));
-        property_device = getProperty(context,
-                res.getString(R.string.property_device));
-        filename_base = String.format(Locale.ENGLISH,
-                res.getString(R.string.filename_base), property_version);
-
-        path_base = String.format(Locale.ENGLISH, "%s%s%s%s", Environment
-                .getExternalStorageDirectory().getAbsolutePath(),
-                File.separator, res.getString(R.string.path_base),
-                File.separator);
-        path_flash_after_update = String.format(Locale.ENGLISH, "%s%s%s",
-                path_base, "FlashAfterUpdate", File.separator);
-        url_base_delta = String.format(Locale.ENGLISH,
-                res.getString(R.string.url_base_delta), property_device);
-        url_base_update = String.format(Locale.ENGLISH,
-                res.getString(R.string.url_base_update), property_device);
-        url_base_full = String.format(
-                res.getString(R.string.url_base_full), property_device);
-        url_base_full_sum = String.format(
-                res.getString(R.string.url_base_full_sum), property_device);
-        url_base_suffix = res.getString(R.string.url_base_suffix);
-        apply_signature = res.getBoolean(R.bool.apply_signature);
-        inject_signature_enable = res
-                .getBoolean(R.bool.inject_signature_enable);
-        inject_signature_keys = res.getString(R.string.inject_signature_keys);
-        secure_mode_enable = res.getBoolean(R.bool.secure_mode_enable);
-        secure_mode_default = res.getBoolean(R.bool.secure_mode_default);
-        url_base_json = String.format(
-                res.getString(R.string.url_base_json),
-                property_device, property_device);
-        official_version_tag = res.getString(R.string.official_version_tag);
-        weekly_version_tag = res.getString(R.string.weekly_version_tag);
-        security_version_tag = res.getString(R.string.security_version_tag);
-        android_version = getProperty(context,
-                res.getString(R.string.android_version));
-        filename_base_prefix = String.format(Locale.ENGLISH,
-                res.getString(R.string.filename_base), android_version);
-        boolean keep_screen_on = false;
-        try {
-            String[] devices = res
-                    .getStringArray(R.array.keep_screen_on_devices);
-            if (devices != null) {
-                for (String device : devices) {
-                    if (property_device.equals(device)) {
-                        keep_screen_on = true;
-                        break;
-                    }
-                }
-            }
-        } catch (Resources.NotFoundException e) {
-        }
-        this.keep_screen_on = keep_screen_on;
-
-        Logger.d("property_version: %s", property_version);
-        Logger.d("property_device: %s", property_device);
-        Logger.d("filename_base: %s", filename_base);
-        Logger.d("filename_base_prefix: %s", filename_base_prefix);
-        Logger.d("path_base: %s", path_base);
-        Logger.d("path_flash_after_update: %s", path_flash_after_update);
-        Logger.d("url_base_delta: %s", url_base_delta);
-        Logger.d("url_base_update: %s", url_base_update);
-        Logger.d("url_base_full: %s", url_base_full);
-        Logger.d("url_base_full_sum: %s", url_base_full_sum);
-        Logger.d("url_base_json: %s", url_base_json);
-        Logger.d("apply_signature: %d", apply_signature ? 1 : 0);
-        Logger.d("inject_signature_enable: %d", inject_signature_enable ? 1 : 0);
-        Logger.d("inject_signature_keys: %s", inject_signature_keys);
-        Logger.d("secure_mode_enable: %d", secure_mode_enable ? 1 : 0);
-        Logger.d("secure_mode_default: %d", secure_mode_default ? 1 : 0);
-        Logger.d("keep_screen_on: %d", keep_screen_on ? 1 : 0);
-    }
-
     public String getFilenameBase() {
-        return filename_base;
+        return filenameBase;
     }
 
     public String getPathBase() {
-        return path_base;
+        return pathBase;
     }
 
     public String getPathFlashAfterUpdate() {
-        return path_flash_after_update;
+        return pathFlashAfterUpdate;
     }
 
     public String getUrlBaseDelta() {
-        return url_base_delta;
+        return urlBaseDelta;
     }
 
     public String getUrlBaseUpdate() {
-        return url_base_update;
+        return urlBaseUpdate;
     }
 
     public String getUrlBaseFull() {
-        return url_base_full;
+        return urlBaseFull;
     }
 
     public String getUrlBaseFullSum() {
-        return url_base_full_sum;
+        return urlBaseFullSum;
     }
 
     public String getUrlSuffix() {
-        return url_base_suffix;
+        return urlBaseSuffix;
     }
 
     public boolean getApplySignature() {
-        return apply_signature;
+        return applySignature;
     }
 
     public boolean getInjectSignatureEnable() {
@@ -217,32 +218,31 @@ public class Config {
         if (getSecureModeEnable()) {
             return getSecureModeCurrent();
         } else {
-            return inject_signature_enable;
+            return injectSignatureEnable;
         }
     }
 
     public String getInjectSignatureKeys() {
-        return inject_signature_keys;
+        return injectSignatureKeys;
     }
 
     public boolean getSecureModeEnable() {
-        return apply_signature && inject_signature_enable && secure_mode_enable;
+        return applySignature && injectSignatureEnable && secureModeEnable;
     }
 
     public boolean getSecureModeDefault() {
-        return secure_mode_default && getSecureModeEnable();
+        return secureModeDefault && getSecureModeEnable();
     }
 
     public boolean getSecureModeCurrent() {
         return getSecureModeEnable()
                 && prefs.getBoolean(PREF_SECURE_MODE_NAME,
-                        getSecureModeDefault());
+                getSecureModeDefault());
     }
 
     public boolean setSecureModeCurrent(boolean enable) {
-        prefs.edit()
-                .putBoolean(PREF_SECURE_MODE_NAME,
-                        getSecureModeEnable() && enable).commit();
+        prefs.edit().putBoolean(PREF_SECURE_MODE_NAME,
+                getSecureModeEnable() && enable).apply();
         return getSecureModeCurrent();
     }
 
@@ -251,8 +251,7 @@ public class Config {
     }
 
     public void setABPerfModeCurrent(boolean enable) {
-        prefs.edit()
-                .putBoolean(PREF_AB_PERF_MODE_NAME, enable).commit();
+        prefs.edit().putBoolean(PREF_AB_PERF_MODE_NAME, enable).apply();
     }
 
     public boolean getShowInfo() {
@@ -260,7 +259,7 @@ public class Config {
     }
 
     public void setShowInfo(boolean enable) {
-        prefs.edit().putBoolean(PREF_SHOW_INFO_NAME, enable).commit();
+        prefs.edit().putBoolean(PREF_SHOW_INFO_NAME, enable).apply();
     }
 
     public List<String> getFlashAfterUpdateZIPs() {
@@ -287,8 +286,7 @@ public class Config {
     }
 
     public void setShownRecoveryWarningSecure() {
-        prefs.edit().putBoolean(PREF_SHOWN_RECOVERY_WARNING_SECURE_NAME, true)
-                .commit();
+        prefs.edit().putBoolean(PREF_SHOWN_RECOVERY_WARNING_SECURE_NAME, true).apply();
     }
 
     public boolean getShownRecoveryWarningNotSecure() {
@@ -297,42 +295,36 @@ public class Config {
     }
 
     public void setShownRecoveryWarningNotSecure() {
-        prefs.edit()
-                .putBoolean(PREF_SHOWN_RECOVERY_WARNING_NOT_SECURE_NAME, true)
-                .commit();
+        prefs.edit().putBoolean(PREF_SHOWN_RECOVERY_WARNING_NOT_SECURE_NAME, true).apply();
     }
 
     public boolean getKeepScreenOn() {
-        return keep_screen_on;
+        return keepScreenOn;
     }
 
     public String getDevice() {
-        return property_device;
+        return propertyDevice;
     }
 
     public String getVersion() {
-        return property_version;
+        return propertyVersion;
     }
 
     public String getFileBaseNamePrefix() {
-        return filename_base_prefix;
+        return filenameBasePrefix;
     }
 
     public String getUrlBaseJson() {
-        return url_base_json;
+        return urlBaseJson;
     }
 
     public boolean isOfficialVersion() {
-        return getVersion().contains(official_version_tag) ||
-                getVersion().contains(weekly_version_tag) ||
-                getVersion().contains(security_version_tag);
+        return getVersion().contains(officialVersionTag) ||
+                getVersion().contains(weeklyVersionTag) ||
+                getVersion().contains(securityVersionTag);
     }
 
     public String getAndroidVersion() {
-        return android_version;
-    }
-
-    public static boolean isABDevice() {
-        return SystemProperties.getBoolean(PROP_AB_DEVICE, false);
+        return androidVersion;
     }
 }
